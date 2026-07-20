@@ -9,6 +9,7 @@ import (
 
 type Deps struct {
 	Auth *controller.AuthController
+	CSRF echo.MiddlewareFunc
 }
 
 func Register(e *echo.Echo, deps Deps) {
@@ -17,5 +18,5 @@ func Register(e *echo.Echo, deps Deps) {
 	})
 
 	api := e.Group("/api")
-	registerAuthRoutes(api, deps.Auth)
+	registerAuthRoutes(api, deps.Auth, deps.CSRF)
 }

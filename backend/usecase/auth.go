@@ -38,6 +38,7 @@ type AccessTokenService interface {
 
 type RandomTokenService interface {
 	GenerateRefreshToken() (string, error)
+	GenerateCSRFToken() (string, error)
 }
 
 type TokenHashService interface {

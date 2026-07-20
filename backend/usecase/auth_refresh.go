@@ -17,6 +17,7 @@ type RefreshInput struct {
 type RefreshOutput struct {
 	AccessToken  string
 	RefreshToken string
+	CSRFToken    string
 	TokenType    string
 	ExpiresAt    string
 }
@@ -91,7 +92,11 @@ func (uc *AuthUseCase) Refresh(ctx context.Context, input RefreshInput) (*Refres
 		if err != nil {
 			return fmt.Errorf("generate access token: %w", err)
 		}
-		output = &RefreshOutput{AccessToken: access, RefreshToken: rawNext, TokenType: "Bearer", ExpiresAt: expiresAt.Format(timeFormat)}
+		csrfToken, err := uc.randomTokens.GenerateCSRFToken()
+		if err != nil {
+			return fmt.Errorf("generate csrf token: %w", err)
+		}
+		output = &RefreshOutput{AccessToken: access, RefreshToken: rawNext, CSRFToken: csrfToken, TokenType: "Bearer", ExpiresAt: expiresAt.Format(timeFormat)}
 		return nil
 	})
 	if err != nil {

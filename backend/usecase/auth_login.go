@@ -22,6 +22,7 @@ type LoginOutput struct {
 	User         LoginUserOutput
 	AccessToken  string
 	RefreshToken string
+	CSRFToken    string
 	TokenType    string
 	ExpiresAt    string
 }
@@ -68,9 +69,13 @@ func (uc *AuthUseCase) Login(ctx context.Context, input LoginInput) (*LoginOutpu
 	if err := uc.refreshTokens.Create(ctx, &refresh); err != nil {
 		return nil, fmt.Errorf("save refresh token: %w", err)
 	}
+	csrfToken, err := uc.randomTokens.GenerateCSRFToken()
+	if err != nil {
+		return nil, fmt.Errorf("generate csrf token: %w", err)
+	}
 
 	return &LoginOutput{
 		User:        LoginUserOutput{ID: user.ID, Name: user.Name, Email: user.Email, Status: user.Status},
-		AccessToken: accessToken, RefreshToken: rawRefresh, TokenType: "Bearer", ExpiresAt: expiresAt.Format(timeFormat),
+		AccessToken: accessToken, RefreshToken: rawRefresh, CSRFToken: csrfToken, TokenType: "Bearer", ExpiresAt: expiresAt.Format(timeFormat),
 	}, nil
 }

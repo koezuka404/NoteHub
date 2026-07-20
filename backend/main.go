@@ -16,6 +16,7 @@ import (
 	"github.com/koezuka404/notehub/controller"
 	infrcrypto "github.com/koezuka404/notehub/crypto"
 	"github.com/koezuka404/notehub/db"
+	appmiddleware "github.com/koezuka404/notehub/middleware"
 	"github.com/koezuka404/notehub/repository"
 	"github.com/koezuka404/notehub/router"
 	"github.com/koezuka404/notehub/usecase"
@@ -63,14 +64,20 @@ func main() {
 	)
 	authController := controller.NewAuthController(authUseCase, controller.AuthCookieConfig{
 		RefreshName: cfg.RefreshTokenCookieName,
+		CSRFName:    cfg.CSRFTokenCookieName,
 		Domain:      cfg.CookieDomain,
 		SameSite:    cfg.CookieSameSite,
 		Secure:      cfg.CookieSecure,
 		RefreshTTL:  cfg.RefreshTokenTTL,
 	})
 
+	csrfMiddleware := appmiddleware.NewCSRFMiddleware(appmiddleware.CSRFConfig{
+		CookieName: cfg.CSRFTokenCookieName,
+		HeaderName: "X-CSRF-Token",
+	})
+
 	e := echo.New()
-	router.Register(e, router.Deps{Auth: authController})
+	router.Register(e, router.Deps{Auth: authController, CSRF: csrfMiddleware})
 	go func() {
 		address := ":" + strconv.Itoa(cfg.HTTPPort)
 		log.Printf("listening on %s", address)

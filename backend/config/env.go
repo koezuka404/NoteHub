@@ -37,6 +37,7 @@ type Config struct {
 	CookieDomain           string
 	CookieSameSite         string
 	RefreshTokenCookieName string
+	CSRFTokenCookieName    string
 	AllowedOrigins         []string
 
 	WSMaxConnectionsPerDocument int
@@ -76,6 +77,7 @@ func LoadFromEnv(getenv func(string) string) (*Config, error) {
 		CookieDomain:                strings.TrimSpace(getenv("COOKIE_DOMAIN")),
 		CookieSameSite:              valueOrDefault(getenv("COOKIE_SAME_SITE"), "Lax"),
 		RefreshTokenCookieName:      valueOrDefault(getenv("REFRESH_TOKEN_COOKIE_NAME"), "notehub_refresh_token"),
+		CSRFTokenCookieName:         valueOrDefault(getenv("CSRF_TOKEN_COOKIE_NAME"), "notehub_csrf_token"),
 		AllowedOrigins:              splitCSV(getenv("CORS_ALLOWED_ORIGINS")),
 		WSMaxConnectionsPerDocument: intValue(getenv("WS_MAX_CONNECTIONS_PER_DOCUMENT"), 3),
 		DocumentAutosaveInterval:    durationValue(getenv("DOCUMENT_AUTOSAVE_INTERVAL"), 5*time.Second),
@@ -121,6 +123,9 @@ func (c Config) Validate() error {
 	}
 	if strings.TrimSpace(c.RefreshTokenCookieName) == "" {
 		errs = append(errs, fmt.Errorf("REFRESH_TOKEN_COOKIE_NAME is required"))
+	}
+	if strings.TrimSpace(c.CSRFTokenCookieName) == "" {
+		errs = append(errs, fmt.Errorf("CSRF_TOKEN_COOKIE_NAME is required"))
 	}
 	if c.WSMaxConnectionsPerDocument < 1 || c.WSMaxConnectionsPerDocument > 20 {
 		errs = append(errs, fmt.Errorf("WS_MAX_CONNECTIONS_PER_DOCUMENT must be between 1 and 20"))

@@ -12,6 +12,7 @@ import (
 
 type AuthCookieConfig struct {
 	RefreshName string
+	CSRFName    string
 	Domain      string
 	SameSite    string
 	Secure      bool
@@ -49,6 +50,7 @@ func (c *AuthController) Login(ctx echo.Context) error {
 		return handleAuthUseCaseError(ctx, err)
 	}
 	c.setRefreshTokenCookie(ctx, o.RefreshToken)
+	c.setCSRFTokenCookie(ctx, o.CSRFToken)
 	return ctx.JSON(http.StatusOK, dto.Response{Data: dto.LoginResponse{User: dto.AuthUserResponse{ID: o.User.ID.String(), Name: o.User.Name, Email: o.User.Email, Status: string(o.User.Status)}, AccessToken: o.AccessToken, TokenType: o.TokenType, ExpiresAt: o.ExpiresAt}})
 }
 
@@ -62,11 +64,16 @@ func (c *AuthController) Refresh(ctx echo.Context) error {
 		return handleAuthUseCaseError(ctx, err)
 	}
 	c.setRefreshTokenCookie(ctx, o.RefreshToken)
+	c.setCSRFTokenCookie(ctx, o.CSRFToken)
 	return ctx.JSON(http.StatusOK, dto.Response{Data: dto.RefreshResponse{AccessToken: o.AccessToken, TokenType: o.TokenType, ExpiresAt: o.ExpiresAt}})
 }
 
 func (c *AuthController) setRefreshTokenCookie(ctx echo.Context, refresh string) {
 	ctx.SetCookie(&http.Cookie{Name: c.cookies.RefreshName, Value: refresh, Path: "/api/auth", Domain: c.cookies.Domain, MaxAge: int(c.cookies.RefreshTTL.Seconds()), HttpOnly: true, Secure: c.cookies.Secure, SameSite: parseSameSite(c.cookies.SameSite)})
+}
+
+func (c *AuthController) setCSRFTokenCookie(ctx echo.Context, token string) {
+	ctx.SetCookie(&http.Cookie{Name: c.cookies.CSRFName, Value: token, Path: "/", Domain: c.cookies.Domain, MaxAge: int(c.cookies.RefreshTTL.Seconds()), HttpOnly: false, Secure: c.cookies.Secure, SameSite: parseSameSite(c.cookies.SameSite)})
 }
 
 func parseSameSite(v string) http.SameSite {
