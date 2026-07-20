@@ -5,6 +5,7 @@ go 1.23.0
 require (
 	github.com/google/uuid v1.6.0
 	github.com/labstack/echo/v4 v4.13.3
+	github.com/redis/go-redis/v9 v9.7.3
 	gorm.io/driver/postgres v1.6.0
 	gorm.io/gorm v1.31.2
 )

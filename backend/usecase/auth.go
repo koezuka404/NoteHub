@@ -23,6 +23,15 @@ type RefreshTokenRepository interface {
 	RevokeFamily(ctx context.Context, familyID uuid.UUID, now time.Time) error
 }
 
+type AuditLogRepository interface {
+	Create(ctx context.Context, log *entity.AuditLog) error
+}
+
+type AccessTokenRevocationStore interface {
+	Revoke(ctx context.Context, jti uuid.UUID, ttl time.Duration) error
+	IsRevoked(ctx context.Context, jti uuid.UUID) (bool, error)
+}
+
 type TransactionManager interface {
 	WithinTransaction(ctx context.Context, fn func(context.Context) error) error
 }
@@ -41,19 +50,20 @@ type RandomTokenService interface {
 	GenerateCSRFToken() (string, error)
 }
 
-type TokenHashService interface {
-	Hash(token string) string
-}
+type TokenHashService interface{ Hash(token string) string }
 
 type AuthInputPort interface {
 	Register(ctx context.Context, input RegisterInput) (*RegisterOutput, error)
 	Login(ctx context.Context, input LoginInput) (*LoginOutput, error)
 	Refresh(ctx context.Context, input RefreshInput) (*RefreshOutput, error)
+	Logout(ctx context.Context, input LogoutInput) (*LogoutOutput, error)
 }
 
 type AuthUseCase struct {
 	users           UserRepository
 	refreshTokens   RefreshTokenRepository
+	auditLogs       AuditLogRepository
+	revokedAccess   AccessTokenRevocationStore
 	transactions    TransactionManager
 	passwords       PasswordService
 	accessTokens    AccessTokenService
@@ -66,6 +76,8 @@ type AuthUseCase struct {
 func NewAuthUseCase(
 	users UserRepository,
 	refreshTokens RefreshTokenRepository,
+	auditLogs AuditLogRepository,
+	revokedAccess AccessTokenRevocationStore,
 	transactions TransactionManager,
 	passwords PasswordService,
 	accessTokens AccessTokenService,
@@ -74,7 +86,8 @@ func NewAuthUseCase(
 	refreshTokenTTL time.Duration,
 ) *AuthUseCase {
 	return &AuthUseCase{
-		users: users, refreshTokens: refreshTokens, transactions: transactions,
+		users: users, refreshTokens: refreshTokens, auditLogs: auditLogs,
+		revokedAccess: revokedAccess, transactions: transactions,
 		passwords: passwords, accessTokens: accessTokens, randomTokens: randomTokens,
 		tokenHashes: tokenHashes, refreshTokenTTL: refreshTokenTTL, now: time.Now,
 	}

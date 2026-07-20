@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/koezuka404/notehub/dto"
+	appmiddleware "github.com/koezuka404/notehub/middleware"
 	"github.com/koezuka404/notehub/usecase"
 	"github.com/labstack/echo/v4"
 )
@@ -68,6 +70,41 @@ func (c *AuthController) Refresh(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, dto.Response{Data: dto.RefreshResponse{AccessToken: o.AccessToken, TokenType: o.TokenType, ExpiresAt: o.ExpiresAt}})
 }
 
+func (c *AuthController) Logout(ctx echo.Context) error {
+	userID, ok := ctx.Get(appmiddleware.ContextUserID).(uuid.UUID)
+	if !ok || userID == uuid.Nil {
+		return writeAuthError(ctx, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+	}
+	jti, ok := ctx.Get(appmiddleware.ContextAccessTokenJTI).(uuid.UUID)
+	if !ok || jti == uuid.Nil {
+		return writeAuthError(ctx, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+	}
+	expiresAt, ok := ctx.Get(appmiddleware.ContextAccessTokenExp).(time.Time)
+	if !ok || expiresAt.IsZero() {
+		return writeAuthError(ctx, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+	}
+	csrfValidated, _ := ctx.Get("csrf_validated").(bool)
+	refreshToken := ""
+	if cookie, err := ctx.Cookie(c.cookies.RefreshName); err == nil {
+		refreshToken = cookie.Value
+	}
+	_, err := c.auth.Logout(ctx.Request().Context(), usecase.LogoutInput{
+		UserID: userID, AccessTokenJTI: jti, AccessTokenExp: expiresAt,
+		RefreshToken: refreshToken, IPAddress: ctx.RealIP(), UserAgent: ctx.Request().UserAgent(),
+		CSRFValidated: csrfValidated,
+	})
+	if err != nil {
+		return handleAuthUseCaseError(ctx, err)
+	}
+	c.clearAuthCookies(ctx)
+	return ctx.JSON(http.StatusOK, dto.Response{Data: dto.LogoutResponse{Message: "ログアウトしました"}})
+}
+
+func (c *AuthController) clearAuthCookies(ctx echo.Context) {
+	ctx.SetCookie(&http.Cookie{Name: c.cookies.RefreshName, Value: "", Path: "/api/auth", Domain: c.cookies.Domain, MaxAge: -1, Expires: time.Unix(0, 0), HttpOnly: true, Secure: c.cookies.Secure, SameSite: parseSameSite(c.cookies.SameSite)})
+	ctx.SetCookie(&http.Cookie{Name: c.cookies.CSRFName, Value: "", Path: "/", Domain: c.cookies.Domain, MaxAge: -1, Expires: time.Unix(0, 0), HttpOnly: false, Secure: c.cookies.Secure, SameSite: parseSameSite(c.cookies.SameSite)})
+}
+
 func (c *AuthController) setRefreshTokenCookie(ctx echo.Context, refresh string) {
 	ctx.SetCookie(&http.Cookie{Name: c.cookies.RefreshName, Value: refresh, Path: "/api/auth", Domain: c.cookies.Domain, MaxAge: int(c.cookies.RefreshTTL.Seconds()), HttpOnly: true, Secure: c.cookies.Secure, SameSite: parseSameSite(c.cookies.SameSite)})
 }
@@ -105,6 +142,14 @@ func handleAuthUseCaseError(ctx echo.Context, err error) error {
 		return writeAuthError(ctx, 401, "REFRESH_TOKEN_INVALID", "リフレッシュトークンが不正です")
 	case errors.Is(err, usecase.ErrRefreshTokenRevoked), errors.Is(err, usecase.ErrRefreshTokenReused):
 		return writeAuthError(ctx, 401, "REFRESH_TOKEN_REVOKED", "リフレッシュトークンは失効しています")
+	case errors.Is(err, usecase.ErrTokenOwnerMismatch):
+		return writeAuthError(ctx, 403, "TOKEN_OWNER_MISMATCH", "トークンの所有者が一致しません")
+	case errors.Is(err, usecase.ErrCSRFTokenInvalid):
+		return writeAuthError(ctx, 403, "CSRF_TOKEN_INVALID", "CSRFトークンが不正です")
+	case errors.Is(err, usecase.ErrAuthServiceUnavailable):
+		return writeAuthError(ctx, 503, "AUTH_SERVICE_UNAVAILABLE", "認証サービスを利用できません")
+	case errors.Is(err, usecase.ErrAccessTokenInvalid):
+		return writeAuthError(ctx, 401, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
 	default:
 		return writeAuthError(ctx, 500, "INTERNAL_ERROR", "内部エラーが発生しました")
 	}

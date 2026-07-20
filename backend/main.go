@@ -17,6 +17,7 @@ import (
 	infrcrypto "github.com/koezuka404/notehub/crypto"
 	"github.com/koezuka404/notehub/db"
 	appmiddleware "github.com/koezuka404/notehub/middleware"
+	appredis "github.com/koezuka404/notehub/redis"
 	"github.com/koezuka404/notehub/repository"
 	"github.com/koezuka404/notehub/router"
 	"github.com/koezuka404/notehub/usecase"
@@ -49,12 +50,31 @@ func main() {
 	if err != nil {
 		log.Fatalf("jwt: %v", err)
 	}
+	redisClient, err := appredis.NewClient(cfg.RedisURL)
+	if err != nil {
+		log.Fatalf("redis client: %v", err)
+	}
+	defer func() {
+		if err := redisClient.Close(); err != nil {
+			log.Printf("redis close: %v", err)
+		}
+	}()
+	redisPingCtx, redisPingCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer redisPingCancel()
+	if err := redisClient.Ping(redisPingCtx); err != nil {
+		log.Fatalf("redis ping: %v", err)
+	}
+
 	userRepository := repository.NewUserRepository(database)
 	refreshTokenRepository := repository.NewRefreshTokenRepository(database)
+	auditLogRepository := repository.NewAuditLogRepository(database)
+	accessTokenRevocations := appredis.NewAccessTokenRevocationStore(redisClient)
 	transactionManager := repository.NewTransactionManager(database)
 	authUseCase := usecase.NewAuthUseCase(
 		userRepository,
 		refreshTokenRepository,
+		auditLogRepository,
+		accessTokenRevocations,
 		transactionManager,
 		infrcrypto.NewPasswordService(cfg.BcryptCost),
 		jwtService,
@@ -71,13 +91,14 @@ func main() {
 		RefreshTTL:  cfg.RefreshTokenTTL,
 	})
 
+	authMiddleware := appmiddleware.NewAuthMiddleware(jwtService, userRepository, accessTokenRevocations)
 	csrfMiddleware := appmiddleware.NewCSRFMiddleware(appmiddleware.CSRFConfig{
 		CookieName: cfg.CSRFTokenCookieName,
 		HeaderName: "X-CSRF-Token",
 	})
 
 	e := echo.New()
-	router.Register(e, router.Deps{Auth: authController, CSRF: csrfMiddleware})
+	router.Register(e, router.Deps{Auth: authController, AuthMiddleware: authMiddleware, CSRF: csrfMiddleware})
 	go func() {
 		address := ":" + strconv.Itoa(cfg.HTTPPort)
 		log.Printf("listening on %s", address)

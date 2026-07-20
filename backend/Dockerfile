@@ -1,16 +1,13 @@
-# --- build stage -------------------------------------------------------------
-FROM golang:1.22-alpine AS build
+
+FROM golang:1.23-alpine AS build
 WORKDIR /src
 
 RUN apk add --no-cache git
 
-COPY go.mod go.sum* ./
-RUN go mod download
-
 COPY . .
+RUN go mod download
 RUN CGO_ENABLED=0 GOOS=linux go build -o /out/notehub-backend .
 
-# --- runtime stage -------------------------------------------------------------
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
