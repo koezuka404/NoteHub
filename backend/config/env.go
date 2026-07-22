@@ -22,8 +22,9 @@ type Config struct {
 	Environment Environment
 	HTTPPort    int
 
-	DatabaseURL string
-	RedisURL    string
+	DatabaseURL           string
+	RedisURL              string
+	RedisOperationTimeout time.Duration
 
 	JWTSecret       string
 	JWTIssuer       string
@@ -39,6 +40,12 @@ type Config struct {
 	RefreshTokenCookieName string
 	CSRFTokenCookieName    string
 	AllowedOrigins         []string
+
+	LoginMaxFailures    int
+	LoginFailureWindow  time.Duration
+	LoginLockDuration   time.Duration
+	RateLimitCapacity   int
+	RateLimitRefillRate float64
 
 	WSMaxConnectionsPerDocument int
 	DocumentAutosaveInterval    time.Duration
@@ -67,6 +74,7 @@ func LoadFromEnv(getenv func(string) string) (*Config, error) {
 		HTTPPort:                    intValue(getenv("HTTP_PORT"), 8080),
 		DatabaseURL:                 strings.TrimSpace(getenv("DATABASE_URL")),
 		RedisURL:                    strings.TrimSpace(getenv("REDIS_URL")),
+		RedisOperationTimeout:       durationValue(getenv("REDIS_OPERATION_TIMEOUT"), 2*time.Second),
 		JWTSecret:                   getenv("JWT_SECRET"),
 		JWTIssuer:                   valueOrDefault(getenv("JWT_ISSUER"), "notehub-api"),
 		JWTAudience:                 valueOrDefault(getenv("JWT_AUDIENCE"), "notehub-web"),
@@ -79,6 +87,11 @@ func LoadFromEnv(getenv func(string) string) (*Config, error) {
 		RefreshTokenCookieName:      valueOrDefault(getenv("REFRESH_TOKEN_COOKIE_NAME"), "notehub_refresh_token"),
 		CSRFTokenCookieName:         valueOrDefault(getenv("CSRF_TOKEN_COOKIE_NAME"), "notehub_csrf_token"),
 		AllowedOrigins:              splitCSV(getenv("CORS_ALLOWED_ORIGINS")),
+		LoginMaxFailures:            intValue(getenv("LOGIN_MAX_FAILURES"), 5),
+		LoginFailureWindow:          durationValue(getenv("LOGIN_FAILURE_WINDOW"), time.Hour),
+		LoginLockDuration:           durationValue(getenv("LOGIN_LOCK_DURATION"), time.Hour),
+		RateLimitCapacity:           intValue(getenv("RATE_LIMIT_CAPACITY"), 10),
+		RateLimitRefillRate:         floatValue(getenv("RATE_LIMIT_REFILL_PER_SECOND"), 1),
 		WSMaxConnectionsPerDocument: intValue(getenv("WS_MAX_CONNECTIONS_PER_DOCUMENT"), 3),
 		DocumentAutosaveInterval:    durationValue(getenv("DOCUMENT_AUTOSAVE_INTERVAL"), 5*time.Second),
 	}
@@ -99,6 +112,9 @@ func (c Config) Validate() error {
 		errs = append(errs, fmt.Errorf("DATABASE_URL is required"))
 	} else if _, err := url.ParseRequestURI(c.DatabaseURL); err != nil {
 		errs = append(errs, fmt.Errorf("DATABASE_URL is invalid: %w", err))
+	}
+	if c.RedisOperationTimeout <= 0 || c.RedisOperationTimeout > 30*time.Second {
+		errs = append(errs, fmt.Errorf("REDIS_OPERATION_TIMEOUT must be greater than 0 and no more than 30s"))
 	}
 	if len([]byte(c.JWTSecret)) < 32 {
 		errs = append(errs, fmt.Errorf("JWT_SECRET must be at least 32 bytes"))
@@ -126,6 +142,21 @@ func (c Config) Validate() error {
 	}
 	if strings.TrimSpace(c.CSRFTokenCookieName) == "" {
 		errs = append(errs, fmt.Errorf("CSRF_TOKEN_COOKIE_NAME is required"))
+	}
+	if c.LoginMaxFailures < 1 || c.LoginMaxFailures > 100 {
+		errs = append(errs, fmt.Errorf("LOGIN_MAX_FAILURES must be between 1 and 100"))
+	}
+	if c.LoginFailureWindow <= 0 {
+		errs = append(errs, fmt.Errorf("LOGIN_FAILURE_WINDOW must be greater than 0"))
+	}
+	if c.LoginLockDuration <= 0 {
+		errs = append(errs, fmt.Errorf("LOGIN_LOCK_DURATION must be greater than 0"))
+	}
+	if c.RateLimitCapacity < 1 {
+		errs = append(errs, fmt.Errorf("RATE_LIMIT_CAPACITY must be greater than 0"))
+	}
+	if c.RateLimitRefillRate <= 0 {
+		errs = append(errs, fmt.Errorf("RATE_LIMIT_REFILL_PER_SECOND must be greater than 0"))
 	}
 	if c.WSMaxConnectionsPerDocument < 1 || c.WSMaxConnectionsPerDocument > 20 {
 		errs = append(errs, fmt.Errorf("WS_MAX_CONNECTIONS_PER_DOCUMENT must be between 1 and 20"))
@@ -226,4 +257,15 @@ func splitCSV(raw string) []string {
 		result = append(result, item)
 	}
 	return result
+}
+
+func floatValue(raw string, fallback float64) float64 {
+	if strings.TrimSpace(raw) == "" {
+		return fallback
+	}
+	value, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+	if err != nil {
+		return -1
+	}
+	return value
 }

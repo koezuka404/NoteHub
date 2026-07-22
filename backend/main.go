@@ -50,7 +50,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("jwt: %v", err)
 	}
-	redisClient, err := appredis.NewClient(cfg.RedisURL)
+	redisClient, err := appredis.NewClientWithTimeout(cfg.RedisURL, cfg.RedisOperationTimeout)
 	if err != nil {
 		log.Fatalf("redis client: %v", err)
 	}
@@ -69,12 +69,15 @@ func main() {
 	refreshTokenRepository := repository.NewRefreshTokenRepository(database)
 	auditLogRepository := repository.NewAuditLogRepository(database)
 	accessTokenRevocations := appredis.NewAccessTokenRevocationStore(redisClient)
+	loginFailures := appredis.NewLoginFailureStore(redisClient, cfg.LoginMaxFailures, cfg.LoginFailureWindow, cfg.LoginLockDuration)
+	tokenBuckets := appredis.NewTokenBucketStore(redisClient)
 	transactionManager := repository.NewTransactionManager(database)
 	authUseCase := usecase.NewAuthUseCase(
 		userRepository,
 		refreshTokenRepository,
 		auditLogRepository,
 		accessTokenRevocations,
+		loginFailures,
 		transactionManager,
 		infrcrypto.NewPasswordService(cfg.BcryptCost),
 		jwtService,
@@ -96,9 +99,12 @@ func main() {
 		CookieName: cfg.CSRFTokenCookieName,
 		HeaderName: "X-CSRF-Token",
 	})
+	rateLimitMiddleware := appmiddleware.NewRateLimitMiddleware(tokenBuckets, appmiddleware.RateLimitConfig{
+		Capacity: cfg.RateLimitCapacity, RefillPerSecond: cfg.RateLimitRefillRate,
+	})
 
 	e := echo.New()
-	router.Register(e, router.Deps{Auth: authController, AuthMiddleware: authMiddleware, CSRF: csrfMiddleware})
+	router.Register(e, router.Deps{Auth: authController, AuthMiddleware: authMiddleware, CSRF: csrfMiddleware, RateLimit: rateLimitMiddleware})
 	go func() {
 		address := ":" + strconv.Itoa(cfg.HTTPPort)
 		log.Printf("listening on %s", address)

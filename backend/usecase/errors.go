@@ -19,4 +19,5 @@ var (
 	ErrCSRFTokenInvalid       = errors.New("csrf token is invalid")
 	ErrTokenOwnerMismatch     = errors.New("token owner mismatch")
 	ErrAuthServiceUnavailable = errors.New("authentication service unavailable")
+	ErrLoginTemporarilyLocked = errors.New("login temporarily locked")
 )

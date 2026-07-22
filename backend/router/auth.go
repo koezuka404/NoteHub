@@ -5,9 +5,9 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-func registerAuthRoutes(group *echo.Group, auth *controller.AuthController, authMiddleware, csrf echo.MiddlewareFunc) {
-	group.POST("/auth/register", auth.Register)
-	group.POST("/auth/login", auth.Login)
-	group.POST("/auth/refresh", auth.Refresh, csrf)
-	group.POST("/auth/logout", auth.Logout, authMiddleware, csrf)
+func registerAuthRoutes(group *echo.Group, auth *controller.AuthController, authMiddleware, csrf, rateLimit echo.MiddlewareFunc) {
+	group.POST("/auth/register", auth.Register, rateLimit)
+	group.POST("/auth/login", auth.Login, rateLimit)
+	group.POST("/auth/refresh", auth.Refresh, csrf, rateLimit)
+	group.POST("/auth/logout", auth.Logout, authMiddleware, csrf, rateLimit)
 }

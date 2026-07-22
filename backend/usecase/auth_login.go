@@ -31,12 +31,24 @@ func (uc *AuthUseCase) Login(ctx context.Context, input LoginInput) (*LoginOutpu
 	if !validateLoginInput(input) {
 		return nil, ErrValidation
 	}
-	user, found, err := uc.users.FindByEmail(ctx, normalizeEmail(input.Email))
+
+	email := normalizeEmail(input.Email)
+	if uc.loginFailures != nil {
+		locked, _, err := uc.loginFailures.IsLocked(ctx, email)
+		if err != nil {
+			return nil, fmt.Errorf("%w: check login lock: %v", ErrAuthServiceUnavailable, err)
+		}
+		if locked {
+			return nil, ErrLoginTemporarilyLocked
+		}
+	}
+
+	user, found, err := uc.users.FindByEmail(ctx, email)
 	if err != nil {
 		return nil, fmt.Errorf("find user by email: %w", err)
 	}
 	if !found {
-		return nil, ErrInvalidCredentials
+		return nil, uc.recordLoginFailure(ctx, email)
 	}
 	if user.IsDeleted() {
 		return nil, ErrAccountDeleted
@@ -48,7 +60,12 @@ func (uc *AuthUseCase) Login(ctx context.Context, input LoginInput) (*LoginOutpu
 		return nil, ErrInvalidCredentials
 	}
 	if err := uc.passwords.Compare(user.PasswordHash, input.Password); err != nil {
-		return nil, ErrInvalidCredentials
+		return nil, uc.recordLoginFailure(ctx, email)
+	}
+	if uc.loginFailures != nil {
+		if err := uc.loginFailures.Reset(ctx, email); err != nil {
+			return nil, fmt.Errorf("%w: reset login failures: %v", ErrAuthServiceUnavailable, err)
+		}
 	}
 
 	now := uc.now().UTC()
@@ -78,4 +95,18 @@ func (uc *AuthUseCase) Login(ctx context.Context, input LoginInput) (*LoginOutpu
 		User:        LoginUserOutput{ID: user.ID, Name: user.Name, Email: user.Email, Status: user.Status},
 		AccessToken: accessToken, RefreshToken: rawRefresh, CSRFToken: csrfToken, TokenType: "Bearer", ExpiresAt: expiresAt.Format(timeFormat),
 	}, nil
+}
+
+func (uc *AuthUseCase) recordLoginFailure(ctx context.Context, email string) error {
+	if uc.loginFailures == nil {
+		return ErrInvalidCredentials
+	}
+	locked, _, err := uc.loginFailures.RecordFailure(ctx, email)
+	if err != nil {
+		return fmt.Errorf("%w: record login failure: %v", ErrAuthServiceUnavailable, err)
+	}
+	if locked {
+		return ErrLoginTemporarilyLocked
+	}
+	return ErrInvalidCredentials
 }

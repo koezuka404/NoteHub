@@ -32,6 +32,12 @@ type AccessTokenRevocationStore interface {
 	IsRevoked(ctx context.Context, jti uuid.UUID) (bool, error)
 }
 
+type LoginFailureStore interface {
+	IsLocked(ctx context.Context, email string) (locked bool, retryAfter time.Duration, err error)
+	RecordFailure(ctx context.Context, email string) (locked bool, retryAfter time.Duration, err error)
+	Reset(ctx context.Context, email string) error
+}
+
 type TransactionManager interface {
 	WithinTransaction(ctx context.Context, fn func(context.Context) error) error
 }
@@ -64,6 +70,7 @@ type AuthUseCase struct {
 	refreshTokens   RefreshTokenRepository
 	auditLogs       AuditLogRepository
 	revokedAccess   AccessTokenRevocationStore
+	loginFailures   LoginFailureStore
 	transactions    TransactionManager
 	passwords       PasswordService
 	accessTokens    AccessTokenService
@@ -78,6 +85,7 @@ func NewAuthUseCase(
 	refreshTokens RefreshTokenRepository,
 	auditLogs AuditLogRepository,
 	revokedAccess AccessTokenRevocationStore,
+	loginFailures LoginFailureStore,
 	transactions TransactionManager,
 	passwords PasswordService,
 	accessTokens AccessTokenService,
@@ -87,7 +95,7 @@ func NewAuthUseCase(
 ) *AuthUseCase {
 	return &AuthUseCase{
 		users: users, refreshTokens: refreshTokens, auditLogs: auditLogs,
-		revokedAccess: revokedAccess, transactions: transactions,
+		revokedAccess: revokedAccess, loginFailures: loginFailures, transactions: transactions,
 		passwords: passwords, accessTokens: accessTokens, randomTokens: randomTokens,
 		tokenHashes: tokenHashes, refreshTokenTTL: refreshTokenTTL, now: time.Now,
 	}

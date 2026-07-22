@@ -11,6 +11,7 @@ type Deps struct {
 	Auth           *controller.AuthController
 	AuthMiddleware echo.MiddlewareFunc
 	CSRF           echo.MiddlewareFunc
+	RateLimit      echo.MiddlewareFunc
 }
 
 func Register(e *echo.Echo, deps Deps) {
@@ -18,5 +19,5 @@ func Register(e *echo.Echo, deps Deps) {
 		return ctx.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
 	api := e.Group("/api")
-	registerAuthRoutes(api, deps.Auth, deps.AuthMiddleware, deps.CSRF)
+	registerAuthRoutes(api, deps.Auth, deps.AuthMiddleware, deps.CSRF, deps.RateLimit)
 }
