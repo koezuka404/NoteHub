@@ -32,14 +32,11 @@ type WorkspaceRole string
 
 const (
 	WorkspaceRoleHost   WorkspaceRole = "host"
-	WorkspaceRoleEditor WorkspaceRole = "editor"
-	WorkspaceRoleViewer WorkspaceRole = "viewer"
+	WorkspaceRoleMember WorkspaceRole = "member"
 )
 
 func (r WorkspaceRole) IsValid() bool {
-	return r == WorkspaceRoleHost ||
-		r == WorkspaceRoleEditor ||
-		r == WorkspaceRoleViewer
+	return r == WorkspaceRoleHost || r == WorkspaceRoleMember
 }
 
 type DocumentVersionType string
