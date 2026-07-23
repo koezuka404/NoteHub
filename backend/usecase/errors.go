@@ -4,6 +4,7 @@ import "errors"
 
 var (
 	ErrValidation             = errors.New("validation error")
+	ErrPasswordInvalid        = errors.New("password invalid")
 	ErrEmailAlreadyExists     = errors.New("email already exists")
 	ErrInvalidCredentials     = errors.New("invalid credentials")
 	ErrAccountSuspended       = errors.New("account suspended")

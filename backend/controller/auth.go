@@ -35,7 +35,7 @@ func (c *AuthController) Register(ctx echo.Context) error {
 	if err := ctx.Bind(&r); err != nil {
 		return writeAuthError(ctx, http.StatusBadRequest, "INVALID_REQUEST", "リクエスト形式が不正です")
 	}
-	o, err := c.auth.Register(ctx.Request().Context(), usecase.RegisterInput{Name: r.Name, Email: r.Email, Password: r.Password})
+	o, err := c.auth.Register(ctx.Request().Context(), usecase.RegisterInput{Name: r.Name, Email: r.Email, Password: r.Password, IPAddress: ctx.RealIP()})
 	if err != nil {
 		return handleAuthUseCaseError(ctx, err)
 	}
@@ -68,6 +68,18 @@ func (c *AuthController) Refresh(ctx echo.Context) error {
 	c.setRefreshTokenCookie(ctx, o.RefreshToken)
 	c.setCSRFTokenCookie(ctx, o.CSRFToken)
 	return ctx.JSON(http.StatusOK, dto.Response{Data: dto.RefreshResponse{AccessToken: o.AccessToken, TokenType: o.TokenType, ExpiresAt: o.ExpiresAt}})
+}
+
+func (c *AuthController) Me(ctx echo.Context) error {
+	userID, ok := ctx.Get(appmiddleware.ContextUserID).(uuid.UUID)
+	if !ok || userID == uuid.Nil {
+		return writeAuthError(ctx, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+	}
+	o, err := c.auth.GetCurrentUser(ctx.Request().Context(), usecase.GetCurrentUserInput{UserID: userID})
+	if err != nil {
+		return handleAuthUseCaseError(ctx, err)
+	}
+	return ctx.JSON(http.StatusOK, dto.Response{Data: dto.MeResponse{User: dto.AuthUserResponse{ID: o.ID.String(), Name: o.Name, Email: o.Email, Status: string(o.Status)}}})
 }
 
 func (c *AuthController) Logout(ctx echo.Context) error {
@@ -128,12 +140,16 @@ func handleAuthUseCaseError(ctx echo.Context, err error) error {
 	switch {
 	case errors.Is(err, usecase.ErrValidation):
 		return writeAuthError(ctx, 400, "VALIDATION_ERROR", "入力値が不正です")
+	case errors.Is(err, usecase.ErrPasswordInvalid):
+		return writeAuthError(ctx, 400, "PASSWORD_INVALID", "パスワードの入力内容を確認してください")
 	case errors.Is(err, usecase.ErrEmailAlreadyExists):
 		return writeAuthError(ctx, 409, "EMAIL_ALREADY_EXISTS", "このメールアドレスは既に登録されています")
 	case errors.Is(err, usecase.ErrInvalidCredentials):
 		return writeAuthError(ctx, 401, "INVALID_CREDENTIALS", "メールアドレスまたはパスワードが正しくありません")
+	case errors.Is(err, usecase.ErrLoginTemporarilyLocked):
+		return writeAuthError(ctx, 429, "LOGIN_RATE_LIMITED", "時間を空けて再度お試しください")
 	case errors.Is(err, usecase.ErrAccountSuspended), errors.Is(err, usecase.ErrAccountDeleted):
-		return writeAuthError(ctx, 401, "ACCOUNT_UNAVAILABLE", "このアカウントは利用できません")
+		return writeAuthError(ctx, 401, "INVALID_CREDENTIALS", "メールアドレスまたはパスワードが正しくありません")
 	case errors.Is(err, usecase.ErrRefreshTokenRequired):
 		return writeAuthError(ctx, 401, "REFRESH_TOKEN_REQUIRED", "リフレッシュトークンが必要です")
 	case errors.Is(err, usecase.ErrRefreshTokenExpired):

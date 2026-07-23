@@ -63,6 +63,7 @@ type AuthInputPort interface {
 	Login(ctx context.Context, input LoginInput) (*LoginOutput, error)
 	Refresh(ctx context.Context, input RefreshInput) (*RefreshOutput, error)
 	Logout(ctx context.Context, input LogoutInput) (*LogoutOutput, error)
+	GetCurrentUser(ctx context.Context, input GetCurrentUserInput) (*GetCurrentUserOutput, error)
 }
 
 type AuthUseCase struct {

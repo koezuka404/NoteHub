@@ -33,3 +33,6 @@ type RefreshResponse struct {
 type LogoutResponse struct {
 	Message string `json:"message"`
 }
+type MeResponse struct {
+	User AuthUserResponse `json:"user"`
+}

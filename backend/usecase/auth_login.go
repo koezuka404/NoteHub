@@ -8,6 +8,9 @@ import (
 	"github.com/koezuka404/notehub/entity"
 )
 
+// dummyPasswordHash prevents timing attacks when the user does not exist.
+const dummyPasswordHash = "$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro4llC/.og/at2.uheWG/igi"
+
 type LoginInput struct {
 	Email, Password, IPAddress, UserAgent string
 }
@@ -48,16 +51,11 @@ func (uc *AuthUseCase) Login(ctx context.Context, input LoginInput) (*LoginOutpu
 		return nil, fmt.Errorf("find user by email: %w", err)
 	}
 	if !found {
+		_ = uc.passwords.Compare(dummyPasswordHash, input.Password)
 		return nil, uc.recordLoginFailure(ctx, email)
 	}
-	if user.IsDeleted() {
-		return nil, ErrAccountDeleted
-	}
-	if user.IsSuspended() {
-		return nil, ErrAccountSuspended
-	}
 	if !user.CanAuthenticate() {
-		return nil, ErrInvalidCredentials
+		return nil, uc.recordLoginFailure(ctx, email)
 	}
 	if err := uc.passwords.Compare(user.PasswordHash, input.Password); err != nil {
 		return nil, uc.recordLoginFailure(ctx, email)

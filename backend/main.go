@@ -104,6 +104,7 @@ func main() {
 	})
 
 	e := echo.New()
+	e.Use(appmiddleware.NewCORSMiddleware(cfg))
 	router.Register(e, router.Deps{Auth: authController, AuthMiddleware: authMiddleware, CSRF: csrfMiddleware, RateLimit: rateLimitMiddleware})
 	go func() {
 		address := ":" + strconv.Itoa(cfg.HTTPPort)

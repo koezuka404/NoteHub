@@ -10,9 +10,10 @@ import (
 )
 
 type RegisterInput struct {
-	Name     string
-	Email    string
-	Password string
+	Name      string
+	Email     string
+	Password  string
+	IPAddress string
 }
 
 type RegisterOutput struct {
@@ -24,8 +25,8 @@ type RegisterOutput struct {
 }
 
 func (uc *AuthUseCase) Register(ctx context.Context, input RegisterInput) (*RegisterOutput, error) {
-	if !validateRegisterInput(input) {
-		return nil, ErrValidation
+	if err := validateRegisterInput(input); err != nil {
+		return nil, err
 	}
 
 	email := normalizeEmail(input.Email)
@@ -50,6 +51,16 @@ func (uc *AuthUseCase) Register(ctx context.Context, input RegisterInput) (*Regi
 
 	if err := uc.users.Create(ctx, &user); err != nil {
 		return nil, fmt.Errorf("create user: %w", err)
+	}
+
+	actorID := user.ID
+	auditLog, err := entity.NewAuditLog(&actorID, "USER_REGISTERED", "user", &user.ID, nil, now)
+	if err != nil {
+		return nil, fmt.Errorf("create audit log entity: %w", err)
+	}
+	auditLog.IPAddress = input.IPAddress
+	if err := uc.auditLogs.Create(ctx, &auditLog); err != nil {
+		return nil, fmt.Errorf("create audit log: %w", err)
 	}
 
 	return &RegisterOutput{
