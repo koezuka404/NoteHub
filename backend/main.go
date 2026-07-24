@@ -94,6 +94,17 @@ func main() {
 		RefreshTTL:  cfg.RefreshTokenTTL,
 	})
 
+	workspaceRepository := repository.NewWorkspaceRepository(database)
+	workspaceMemberRepository := repository.NewWorkspaceMemberRepository(database)
+	workspaceUseCase := usecase.NewWorkspaceUseCase(
+		userRepository,
+		workspaceRepository,
+		workspaceMemberRepository,
+		auditLogRepository,
+		transactionManager,
+	)
+	workspaceController := controller.NewWorkspaceController(workspaceUseCase)
+
 	authMiddleware := appmiddleware.NewAuthMiddleware(jwtService, userRepository, accessTokenRevocations)
 	csrfMiddleware := appmiddleware.NewCSRFMiddleware(appmiddleware.CSRFConfig{
 		CookieName: cfg.CSRFTokenCookieName,
@@ -105,7 +116,13 @@ func main() {
 
 	e := echo.New()
 	e.Use(appmiddleware.NewCORSMiddleware(cfg))
-	router.Register(e, router.Deps{Auth: authController, AuthMiddleware: authMiddleware, CSRF: csrfMiddleware, RateLimit: rateLimitMiddleware})
+	router.Register(e, router.Deps{
+		Auth:           authController,
+		Workspace:      workspaceController,
+		AuthMiddleware: authMiddleware,
+		CSRF:           csrfMiddleware,
+		RateLimit:      rateLimitMiddleware,
+	})
 	go func() {
 		address := ":" + strconv.Itoa(cfg.HTTPPort)
 		log.Printf("listening on %s", address)
