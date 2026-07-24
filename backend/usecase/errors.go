@@ -30,4 +30,12 @@ var (
 	ErrHostPermissionRequired      = errors.New("host permission required")
 	ErrWorkspaceHostSuspended      = errors.New("workspace host suspended")
 	ErrWorkspaceHostDeleted        = errors.New("workspace host deleted")
+
+	ErrUserNotFound              = errors.New("user not found")
+	ErrTargetUserNotFound        = errors.New("target user not found")
+	ErrTargetAccountUnavailable  = errors.New("target account unavailable")
+	ErrCannotAddSelf             = errors.New("cannot add self")
+	ErrMemberAlreadyExists       = errors.New("member already exists")
+	ErrMemberNotFound            = errors.New("member not found")
+	ErrCannotRemoveHost          = errors.New("cannot remove host")
 )

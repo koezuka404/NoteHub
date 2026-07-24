@@ -29,6 +29,7 @@ type IWorkspaceMemberRepository interface {
 	FindByWorkspaceAndUser(ctx context.Context, workspaceID, userID uuid.UUID) (*entity.WorkspaceMember, bool, error)
 	FindByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]entity.WorkspaceMember, error)
 	Exists(ctx context.Context, workspaceID, userID uuid.UUID) (bool, error)
+	Delete(ctx context.Context, workspaceID, userID uuid.UUID) error
 }
 
 type IWorkspaceUserRepository interface {
