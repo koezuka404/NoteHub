@@ -8,7 +8,7 @@ import (
 	"github.com/koezuka404/notehub/entity"
 )
 
-type UserRepository interface {
+type IUserRepository interface {
 	Create(ctx context.Context, user *entity.User) error
 	FindByID(ctx context.Context, id uuid.UUID) (user *entity.User, found bool, err error)
 	FindByEmail(ctx context.Context, email string) (user *entity.User, found bool, err error)
@@ -16,49 +16,49 @@ type UserRepository interface {
 	IncrementAuthVersion(ctx context.Context, userID uuid.UUID, now time.Time) error
 }
 
-type RefreshTokenRepository interface {
+type IRefreshTokenRepository interface {
 	Create(ctx context.Context, token *entity.RefreshToken) error
 	FindByHashForUpdate(ctx context.Context, tokenHash string) (token *entity.RefreshToken, found bool, err error)
 	Update(ctx context.Context, token *entity.RefreshToken) error
 	RevokeFamily(ctx context.Context, familyID uuid.UUID, now time.Time) error
 }
 
-type AuditLogRepository interface {
+type IAuditLogRepository interface {
 	Create(ctx context.Context, log *entity.AuditLog) error
 }
 
-type AccessTokenRevocationStore interface {
+type IAccessTokenRevocationStore interface {
 	Revoke(ctx context.Context, jti uuid.UUID, ttl time.Duration) error
 	IsRevoked(ctx context.Context, jti uuid.UUID) (bool, error)
 }
 
-type LoginFailureStore interface {
+type ILoginFailureStore interface {
 	IsLocked(ctx context.Context, email string) (locked bool, retryAfter time.Duration, err error)
 	RecordFailure(ctx context.Context, email string) (locked bool, retryAfter time.Duration, err error)
 	Reset(ctx context.Context, email string) error
 }
 
-type TransactionManager interface {
+type ITransactionManager interface {
 	WithinTransaction(ctx context.Context, fn func(context.Context) error) error
 }
 
-type PasswordService interface {
+type IPasswordService interface {
 	Hash(password string) (string, error)
 	Compare(passwordHash, password string) error
 }
 
-type AccessTokenService interface {
+type IAccessTokenService interface {
 	GenerateAccessToken(userID uuid.UUID, authVersion uint, now time.Time) (token string, expiresAt time.Time, err error)
 }
 
-type RandomTokenService interface {
+type IRandomTokenService interface {
 	GenerateRefreshToken() (string, error)
 	GenerateCSRFToken() (string, error)
 }
 
-type TokenHashService interface{ Hash(token string) string }
+type ITokenHashService interface{ Hash(token string) string }
 
-type AuthInputPort interface {
+type IAuthUsecase interface {
 	Register(ctx context.Context, input RegisterInput) (*RegisterOutput, error)
 	Login(ctx context.Context, input LoginInput) (*LoginOutput, error)
 	Refresh(ctx context.Context, input RefreshInput) (*RefreshOutput, error)
@@ -67,31 +67,31 @@ type AuthInputPort interface {
 }
 
 type AuthUseCase struct {
-	users           UserRepository
-	refreshTokens   RefreshTokenRepository
-	auditLogs       AuditLogRepository
-	revokedAccess   AccessTokenRevocationStore
-	loginFailures   LoginFailureStore
-	transactions    TransactionManager
-	passwords       PasswordService
-	accessTokens    AccessTokenService
-	randomTokens    RandomTokenService
-	tokenHashes     TokenHashService
+	users           IUserRepository
+	refreshTokens   IRefreshTokenRepository
+	auditLogs       IAuditLogRepository
+	revokedAccess   IAccessTokenRevocationStore
+	loginFailures   ILoginFailureStore
+	transactions    ITransactionManager
+	passwords       IPasswordService
+	accessTokens    IAccessTokenService
+	randomTokens    IRandomTokenService
+	tokenHashes     ITokenHashService
 	refreshTokenTTL time.Duration
 	now             func() time.Time
 }
 
 func NewAuthUseCase(
-	users UserRepository,
-	refreshTokens RefreshTokenRepository,
-	auditLogs AuditLogRepository,
-	revokedAccess AccessTokenRevocationStore,
-	loginFailures LoginFailureStore,
-	transactions TransactionManager,
-	passwords PasswordService,
-	accessTokens AccessTokenService,
-	randomTokens RandomTokenService,
-	tokenHashes TokenHashService,
+	users IUserRepository,
+	refreshTokens IRefreshTokenRepository,
+	auditLogs IAuditLogRepository,
+	revokedAccess IAccessTokenRevocationStore,
+	loginFailures ILoginFailureStore,
+	transactions ITransactionManager,
+	passwords IPasswordService,
+	accessTokens IAccessTokenService,
+	randomTokens IRandomTokenService,
+	tokenHashes ITokenHashService,
 	refreshTokenTTL time.Duration,
 ) *AuthUseCase {
 	return &AuthUseCase{

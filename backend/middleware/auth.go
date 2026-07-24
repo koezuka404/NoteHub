@@ -23,26 +23,26 @@ const (
 )
 
 // Concrete interfaces avoid coupling Middleware to repository implementations.
-type AuthUserFinder interface {
+type IAuthUserFinder interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*entity.User, bool, error)
 }
 
-type AccessTokenValidator interface {
+type IAccessTokenValidator interface {
 	ValidateAccessToken(raw string, now time.Time) (infrcrypto.AccessTokenClaims, error)
 }
 
-type AccessTokenRevocationChecker interface {
+type IAccessTokenRevocationChecker interface {
 	IsRevoked(ctx context.Context, jti uuid.UUID) (bool, error)
 }
 
 type AuthMiddleware struct {
-	tokens  AccessTokenValidator
-	users   AuthUserFinder
-	revoked AccessTokenRevocationChecker
+	tokens  IAccessTokenValidator
+	users   IAuthUserFinder
+	revoked IAccessTokenRevocationChecker
 	now     func() time.Time
 }
 
-func NewAuthMiddleware(tokens AccessTokenValidator, users AuthUserFinder, revoked AccessTokenRevocationChecker) echo.MiddlewareFunc {
+func NewAuthMiddleware(tokens IAccessTokenValidator, users IAuthUserFinder, revoked IAccessTokenRevocationChecker) echo.MiddlewareFunc {
 	middleware := &AuthMiddleware{tokens: tokens, users: users, revoked: revoked, now: time.Now}
 	return middleware.Handle
 }

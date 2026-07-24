@@ -22,11 +22,11 @@ type AuthCookieConfig struct {
 }
 
 type AuthController struct {
-	auth    usecase.AuthInputPort
+	auth    usecase.IAuthUsecase
 	cookies AuthCookieConfig
 }
 
-func NewAuthController(auth usecase.AuthInputPort, cookies AuthCookieConfig) *AuthController {
+func NewAuthController(auth usecase.IAuthUsecase, cookies AuthCookieConfig) *AuthController {
 	return &AuthController{auth: auth, cookies: cookies}
 }
 

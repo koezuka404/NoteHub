@@ -11,7 +11,7 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-type TokenBucketLimiter interface {
+type ITokenBucketLimiter interface {
 	Allow(ctx context.Context, key string, capacity int, refillPerSecond float64, now time.Time) (bool, time.Duration, error)
 }
 
@@ -21,12 +21,12 @@ type RateLimitConfig struct {
 }
 
 type RateLimitMiddleware struct {
-	limiter TokenBucketLimiter
+	limiter ITokenBucketLimiter
 	config  RateLimitConfig
 	now     func() time.Time
 }
 
-func NewRateLimitMiddleware(limiter TokenBucketLimiter, config RateLimitConfig) echo.MiddlewareFunc {
+func NewRateLimitMiddleware(limiter ITokenBucketLimiter, config RateLimitConfig) echo.MiddlewareFunc {
 	middleware := &RateLimitMiddleware{limiter: limiter, config: config, now: time.Now}
 	return middleware.Handle
 }

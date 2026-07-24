@@ -11,13 +11,13 @@ import (
 
 const accessTokenRevocationPrefix = "auth:access_token:revoked:"
 
-type revocationCommands interface {
+type IRevocationCommands interface {
 	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *goredis.StatusCmd
 	Get(ctx context.Context, key string) *goredis.StringCmd
 }
 
 type AccessTokenRevocationStore struct {
-	commands    revocationCommands
+	commands    IRevocationCommands
 	withTimeout func(context.Context) (context.Context, context.CancelFunc)
 }
 
