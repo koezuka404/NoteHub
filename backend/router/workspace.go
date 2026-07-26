@@ -8,6 +8,7 @@ import (
 func registerWorkspaceRoutes(
 	group *echo.Group,
 	workspace *controller.WorkspaceController,
+	member *controller.MemberController,
 	authMiddleware echo.MiddlewareFunc,
 	rateLimit echo.MiddlewareFunc,
 ) {
@@ -17,4 +18,9 @@ func registerWorkspaceRoutes(
 	workspaces.GET("/:workspaceId", workspace.Get)
 	workspaces.PATCH("/:workspaceId", workspace.Update, rateLimit)
 	workspaces.DELETE("/:workspaceId", workspace.Delete, rateLimit)
+
+	workspaces.GET("/:workspaceId/members", member.List)
+	workspaces.GET("/:workspaceId/users/search", member.Search, rateLimit)
+	workspaces.POST("/:workspaceId/members", member.Add, rateLimit)
+	workspaces.DELETE("/:workspaceId/members/:userId", member.Remove, rateLimit)
 }

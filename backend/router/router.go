@@ -8,11 +8,12 @@ import (
 )
 
 type Deps struct {
-	Auth               *controller.AuthController
-	Workspace          *controller.WorkspaceController
-	AuthMiddleware     echo.MiddlewareFunc
-	CSRF               echo.MiddlewareFunc
-	RateLimit          echo.MiddlewareFunc
+	Auth           *controller.AuthController
+	Workspace      *controller.WorkspaceController
+	Member         *controller.MemberController
+	AuthMiddleware echo.MiddlewareFunc
+	CSRF           echo.MiddlewareFunc
+	RateLimit      echo.MiddlewareFunc
 }
 
 func Register(e *echo.Echo, deps Deps) {
@@ -21,5 +22,5 @@ func Register(e *echo.Echo, deps Deps) {
 	})
 	api := e.Group("/api")
 	registerAuthRoutes(api, deps.Auth, deps.AuthMiddleware, deps.CSRF, deps.RateLimit)
-	registerWorkspaceRoutes(api, deps.Workspace, deps.AuthMiddleware, deps.RateLimit)
+	registerWorkspaceRoutes(api, deps.Workspace, deps.Member, deps.AuthMiddleware, deps.RateLimit)
 }

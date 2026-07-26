@@ -104,6 +104,14 @@ func main() {
 		transactionManager,
 	)
 	workspaceController := controller.NewWorkspaceController(workspaceUseCase)
+	memberUseCase := usecase.NewMemberUseCase(
+		userRepository,
+		workspaceMemberRepository,
+		auditLogRepository,
+		transactionManager,
+		workspaceUseCase,
+	)
+	memberController := controller.NewMemberController(memberUseCase)
 
 	authMiddleware := appmiddleware.NewAuthMiddleware(jwtService, userRepository, accessTokenRevocations)
 	csrfMiddleware := appmiddleware.NewCSRFMiddleware(appmiddleware.CSRFConfig{
@@ -119,6 +127,7 @@ func main() {
 	router.Register(e, router.Deps{
 		Auth:           authController,
 		Workspace:      workspaceController,
+		Member:         memberController,
 		AuthMiddleware: authMiddleware,
 		CSRF:           csrfMiddleware,
 		RateLimit:      rateLimitMiddleware,
