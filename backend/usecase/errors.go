@@ -38,4 +38,7 @@ var (
 	ErrMemberAlreadyExists       = errors.New("member already exists")
 	ErrMemberNotFound            = errors.New("member not found")
 	ErrCannotRemoveHost          = errors.New("cannot remove host")
+
+	ErrDocumentNotFound = errors.New("document not found")
+	ErrDocumentDeleted  = errors.New("document deleted")
 )

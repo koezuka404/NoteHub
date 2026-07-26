@@ -13,10 +13,11 @@ type Document struct {
 	WorkspaceID uuid.UUID  `gorm:"type:uuid;not null;index"`
 	CreatedBy   uuid.UUID  `gorm:"type:uuid;not null;index"`
 	UpdatedBy   uuid.UUID  `gorm:"type:uuid;not null;index"`
-	Title       string     `gorm:"size:255;not null"`
+	Title       string     `gorm:"size:100;not null"`
 	Content     string     `gorm:"type:text;not null"`
 	Revision    uint64     `gorm:"not null;default:1"`
 	DeletedAt   *time.Time `gorm:"index"`
+	DeletedBy   *uuid.UUID `gorm:"type:uuid;index"`
 	CreatedAt   time.Time  `gorm:"not null"`
 	UpdatedAt   time.Time  `gorm:"not null"`
 }
@@ -72,6 +73,7 @@ func (d *Document) LogicalDelete(actorID uuid.UUID, now time.Time) error {
 		return fmt.Errorf("actor id is required")
 	}
 	d.DeletedAt = timePointer(now)
+	d.DeletedBy = &actorID
 	d.UpdatedBy = actorID
 	d.UpdatedAt = now
 	return nil

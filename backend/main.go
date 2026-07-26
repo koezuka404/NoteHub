@@ -113,6 +113,16 @@ func main() {
 	)
 	memberController := controller.NewMemberController(memberUseCase)
 
+	documentRepository := repository.NewDocumentRepository(database)
+	documentUseCase := usecase.NewDocumentUseCase(
+		documentRepository,
+		auditLogRepository,
+		transactionManager,
+		workspaceUseCase,
+		nil,
+	)
+	documentController := controller.NewDocumentController(documentUseCase)
+
 	authMiddleware := appmiddleware.NewAuthMiddleware(jwtService, userRepository, accessTokenRevocations)
 	csrfMiddleware := appmiddleware.NewCSRFMiddleware(appmiddleware.CSRFConfig{
 		CookieName: cfg.CSRFTokenCookieName,
@@ -128,6 +138,7 @@ func main() {
 		Auth:           authController,
 		Workspace:      workspaceController,
 		Member:         memberController,
+		Document:       documentController,
 		AuthMiddleware: authMiddleware,
 		CSRF:           csrfMiddleware,
 		RateLimit:      rateLimitMiddleware,
