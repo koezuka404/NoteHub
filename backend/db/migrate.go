@@ -16,6 +16,7 @@ func Migrate(gdb *gorm.DB) error {
 			&entity.Workspace{},
 			&entity.WorkspaceMember{},
 			&entity.Document{},
+			&entity.DocumentVersion{},
 		); err != nil {
 			return fmt.Errorf("auto migrate: %w", err)
 		}
@@ -66,6 +67,9 @@ func Migrate(gdb *gorm.DB) error {
 			`CREATE INDEX IF NOT EXISTS idx_documents_workspace_updated
 			 ON documents (workspace_id, updated_at DESC)
 			 WHERE deleted_at IS NULL`,
+
+			`CREATE INDEX IF NOT EXISTS idx_document_versions_document_created
+			 ON document_versions (document_id, created_at DESC)`,
 		}
 
 		for _, statement := range statements {

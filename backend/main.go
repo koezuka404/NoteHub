@@ -71,7 +71,7 @@ func main() {
 	accessTokenRevocations := appredis.NewAccessTokenRevocationStore(redisClient)
 	loginFailures := appredis.NewLoginFailureStore(redisClient, cfg.LoginMaxFailures, cfg.LoginFailureWindow, cfg.LoginLockDuration)
 	tokenBuckets := appredis.NewTokenBucketStore(redisClient)
-	transactionManager := repository.NewTransactionManager(database)
+	transactionManager := usecase.NewTransactionManager(database)
 	authUseCase := usecase.NewAuthUseCase(
 		userRepository,
 		refreshTokenRepository,
@@ -123,6 +123,16 @@ func main() {
 	)
 	documentController := controller.NewDocumentController(documentUseCase)
 
+	versionRepository := repository.NewDocumentVersionRepository(database)
+	versionUseCase := usecase.NewVersionUseCase(
+		documentRepository,
+		versionRepository,
+		transactionManager,
+		workspaceUseCase,
+		nil,
+	)
+	versionController := controller.NewVersionController(versionUseCase)
+
 	authMiddleware := appmiddleware.NewAuthMiddleware(jwtService, userRepository, accessTokenRevocations)
 	csrfMiddleware := appmiddleware.NewCSRFMiddleware(appmiddleware.CSRFConfig{
 		CookieName: cfg.CSRFTokenCookieName,
@@ -139,6 +149,7 @@ func main() {
 		Workspace:      workspaceController,
 		Member:         memberController,
 		Document:       documentController,
+		Version:        versionController,
 		AuthMiddleware: authMiddleware,
 		CSRF:           csrfMiddleware,
 		RateLimit:      rateLimitMiddleware,

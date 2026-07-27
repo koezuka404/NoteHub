@@ -38,10 +38,6 @@ type ILoginFailureStore interface {
 	Reset(ctx context.Context, email string) error
 }
 
-type ITransactionManager interface {
-	WithinTransaction(ctx context.Context, fn func(context.Context) error) error
-}
-
 type IPasswordService interface {
 	Hash(password string) (string, error)
 	Compare(passwordHash, password string) error

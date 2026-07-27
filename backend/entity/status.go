@@ -42,13 +42,15 @@ func (r WorkspaceRole) IsValid() bool {
 type DocumentVersionType string
 
 const (
-	DocumentVersionManual   DocumentVersionType = "manual"
-	DocumentVersionAutosave DocumentVersionType = "autosave"
-	DocumentVersionRestore  DocumentVersionType = "restore"
+	DocumentVersionAutoSave       DocumentVersionType = "auto_save"
+	DocumentVersionManualSave     DocumentVersionType = "manual_save"
+	DocumentVersionBeforeRestore  DocumentVersionType = "before_restore"
+	DocumentVersionRestore        DocumentVersionType = "restore"
 )
 
 func (t DocumentVersionType) IsValid() bool {
-	return t == DocumentVersionManual ||
-		t == DocumentVersionAutosave ||
+	return t == DocumentVersionAutoSave ||
+		t == DocumentVersionManualSave ||
+		t == DocumentVersionBeforeRestore ||
 		t == DocumentVersionRestore
 }

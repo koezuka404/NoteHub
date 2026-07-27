@@ -41,4 +41,6 @@ var (
 
 	ErrDocumentNotFound = errors.New("document not found")
 	ErrDocumentDeleted  = errors.New("document deleted")
+
+	ErrVersionNotFound = errors.New("version not found")
 )
