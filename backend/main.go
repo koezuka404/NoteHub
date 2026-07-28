@@ -114,12 +114,13 @@ func main() {
 	memberController := controller.NewMemberController(memberUseCase)
 
 	documentRepository := repository.NewDocumentRepository(database)
+	documentCache := appredis.NewDocumentCacheStore(redisClient)
 	documentUseCase := usecase.NewDocumentUseCase(
 		documentRepository,
 		auditLogRepository,
 		transactionManager,
 		workspaceUseCase,
-		nil,
+		documentCache,
 	)
 	documentController := controller.NewDocumentController(documentUseCase)
 
@@ -129,7 +130,7 @@ func main() {
 		versionRepository,
 		transactionManager,
 		workspaceUseCase,
-		nil,
+		documentCache,
 	)
 	versionController := controller.NewVersionController(versionUseCase)
 

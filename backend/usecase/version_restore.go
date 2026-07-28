@@ -91,5 +91,10 @@ func (uc *VersionUseCase) RestoreVersion(ctx context.Context, input RestoreVersi
 		return nil, err
 	}
 
+	if uc.cache != nil {
+		if err := uc.cache.SetContent(ctx, output.DocumentID, target.Content, input.UserID, now); err != nil {
+			return nil, fmt.Errorf("update document cache after restore: %w", err)
+		}
+	}
 	return output, nil
 }

@@ -24,12 +24,6 @@ type IDocumentRepository interface {
 	Update(ctx context.Context, doc *entity.Document) error
 }
 
-// IDocumentCache is optional until Redis editing cache is implemented.
-type IDocumentCache interface {
-	GetContent(ctx context.Context, documentID uuid.UUID) (string, bool, error)
-	Clear(ctx context.Context, documentID uuid.UUID) error
-}
-
 type DocumentUseCase struct {
 	docs         IDocumentRepository
 	auditLogs    IAuditLogRepository
