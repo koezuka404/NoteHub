@@ -41,6 +41,9 @@ var (
 
 	ErrDocumentNotFound = errors.New("document not found")
 	ErrDocumentDeleted  = errors.New("document deleted")
+	ErrDocumentContentTooLarge = errors.New("document content too large")
 
 	ErrVersionNotFound = errors.New("version not found")
+
+	ErrWebSocketConnectionLimitExceeded = errors.New("websocket connection limit exceeded")
 )

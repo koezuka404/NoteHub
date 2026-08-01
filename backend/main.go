@@ -12,6 +12,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/koezuka404/notehub/batch"
 	"github.com/koezuka404/notehub/config"
 	"github.com/koezuka404/notehub/controller"
 	infrcrypto "github.com/koezuka404/notehub/crypto"
@@ -21,6 +22,7 @@ import (
 	"github.com/koezuka404/notehub/repository"
 	"github.com/koezuka404/notehub/router"
 	"github.com/koezuka404/notehub/usecase"
+	appws "github.com/koezuka404/notehub/websocket"
 )
 
 func main() {
@@ -115,6 +117,29 @@ func main() {
 
 	documentRepository := repository.NewDocumentRepository(database)
 	documentCache := appredis.NewDocumentCacheStore(redisClient)
+	wsSessionStore := appredis.NewWebSocketSessionStore(redisClient)
+	sessionTTL := cfg.AccessTokenTTL + time.Minute
+	documentEditorsStore := appredis.NewDocumentEditorsStore(redisClient, sessionTTL)
+	wsHub := appws.NewHub()
+	wsEventPublisher := appws.NewDocumentEventPublisher(wsHub)
+	documentWebSocketUseCase := usecase.NewDocumentWebSocketUseCase(
+		documentRepository,
+		userRepository,
+		documentCache,
+		wsSessionStore,
+		documentEditorsStore,
+		workspaceUseCase,
+		cfg.WSMaxConnectionsPerDocument,
+		sessionTTL,
+	)
+	webSocketController := controller.NewWebSocketController(
+		documentWebSocketUseCase,
+		jwtService,
+		userRepository,
+		accessTokenRevocations,
+		wsHub,
+		controller.WebSocketControllerConfigFromApp(cfg),
+	)
 	documentUseCase := usecase.NewDocumentUseCase(
 		documentRepository,
 		auditLogRepository,
@@ -131,8 +156,22 @@ func main() {
 		transactionManager,
 		workspaceUseCase,
 		documentCache,
+		wsEventPublisher,
 	)
 	versionController := controller.NewVersionController(versionUseCase)
+
+	lockStore := appredis.NewLockStore(redisClient)
+	documentAutoSaveUseCase := usecase.NewDocumentAutoSaveUseCase(
+		documentRepository,
+		versionRepository,
+		documentCache,
+		lockStore,
+		transactionManager,
+		30*time.Second,
+	)
+	batchCtx, batchCancel := context.WithCancel(context.Background())
+	defer batchCancel()
+	go batch.NewAutoSaveBatch(documentAutoSaveUseCase, cfg.DocumentAutosaveInterval).Run(batchCtx)
 
 	authMiddleware := appmiddleware.NewAuthMiddleware(jwtService, userRepository, accessTokenRevocations)
 	csrfMiddleware := appmiddleware.NewCSRFMiddleware(appmiddleware.CSRFConfig{
@@ -151,6 +190,7 @@ func main() {
 		Member:         memberController,
 		Document:       documentController,
 		Version:        versionController,
+		WebSocket:      webSocketController,
 		AuthMiddleware: authMiddleware,
 		CSRF:           csrfMiddleware,
 		RateLimit:      rateLimitMiddleware,
@@ -165,6 +205,7 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
+	batchCancel()
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 	if err := e.Shutdown(shutdownCtx); err != nil {

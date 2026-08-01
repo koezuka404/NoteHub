@@ -96,5 +96,10 @@ func (uc *VersionUseCase) RestoreVersion(ctx context.Context, input RestoreVersi
 			return nil, fmt.Errorf("update document cache after restore: %w", err)
 		}
 	}
+	if uc.notifier != nil {
+		if err := uc.notifier.NotifyDocumentRestored(output.DocumentID, target.Content, target.ID); err != nil {
+			return nil, fmt.Errorf("notify document restored: %w", err)
+		}
+	}
 	return output, nil
 }

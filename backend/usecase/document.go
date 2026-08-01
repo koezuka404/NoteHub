@@ -81,10 +81,10 @@ func (uc *DocumentUseCase) authorizeDoc(ctx context.Context, userID uuid.UUID, d
 
 func (uc *DocumentUseCase) docContent(ctx context.Context, doc *entity.Document) (string, error) {
 	if uc.cache != nil {
-		if content, ok, err := uc.cache.GetContent(ctx, doc.ID); err != nil {
+		if state, ok, err := uc.cache.GetContentState(ctx, doc.ID); err != nil {
 			return "", err
 		} else if ok {
-			return content, nil
+			return state.Content, nil
 		}
 	}
 	return doc.Content, nil

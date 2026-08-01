@@ -27,6 +27,7 @@ type VersionUseCase struct {
 	transactions ITransactionManager
 	access       IAccessCheck
 	cache        IDocumentCache
+	notifier     IDocumentWebSocketNotifier
 	now          func() time.Time
 }
 
@@ -36,6 +37,7 @@ func NewVersionUseCase(
 	transactions ITransactionManager,
 	access IAccessCheck,
 	cache IDocumentCache,
+	notifier IDocumentWebSocketNotifier,
 ) *VersionUseCase {
 	return &VersionUseCase{
 		docs:         docs,
@@ -43,6 +45,7 @@ func NewVersionUseCase(
 		transactions: transactions,
 		access:       access,
 		cache:        cache,
+		notifier:     notifier,
 		now:          time.Now,
 	}
 }
@@ -74,10 +77,10 @@ func (uc *VersionUseCase) authorizeDoc(ctx context.Context, userID uuid.UUID, do
 
 func (uc *VersionUseCase) currentContent(ctx context.Context, doc *entity.Document) (string, error) {
 	if uc.cache != nil {
-		if content, ok, err := uc.cache.GetContent(ctx, doc.ID); err != nil {
+		if state, ok, err := uc.cache.GetContentState(ctx, doc.ID); err != nil {
 			return "", err
 		} else if ok {
-			return content, nil
+			return state.Content, nil
 		}
 	}
 	return doc.Content, nil

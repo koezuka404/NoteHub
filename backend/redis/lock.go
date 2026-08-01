@@ -8,18 +8,13 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
-type ILockCommands interface {
-	SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) *goredis.BoolCmd
-	Del(ctx context.Context, keys ...string) *goredis.IntCmd
-}
-
 type LockStore struct {
-	commands    ILockCommands
+	client      *goredis.Client
 	withTimeout func(context.Context) (context.Context, context.CancelFunc)
 }
 
 func NewLockStore(client *Client) *LockStore {
-	return &LockStore{commands: client.client, withTimeout: client.withTimeout}
+	return &LockStore{client: client.client, withTimeout: client.withTimeout}
 }
 
 func (s *LockStore) TryLock(ctx context.Context, key string, ttl time.Duration) (bool, error) {
@@ -29,7 +24,7 @@ func (s *LockStore) TryLock(ctx context.Context, key string, ttl time.Duration) 
 	ctx, cancel := s.withTimeout(ctx)
 	defer cancel()
 
-	ok, err := s.commands.SetNX(ctx, key, "1", ttl).Result()
+	ok, err := s.client.SetNX(ctx, key, "1", ttl).Result()
 	if err != nil {
 		return false, fmt.Errorf("acquire lock: %w", err)
 	}
@@ -43,7 +38,7 @@ func (s *LockStore) Unlock(ctx context.Context, key string) error {
 	ctx, cancel := s.withTimeout(ctx)
 	defer cancel()
 
-	if err := s.commands.Del(ctx, key).Err(); err != nil {
+	if err := s.client.Del(ctx, key).Err(); err != nil {
 		return fmt.Errorf("release lock: %w", err)
 	}
 	return nil
