@@ -17,14 +17,12 @@ export default function LoginPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
-    setMessage('');
     setSubmitting(true);
 
     try {
@@ -35,8 +33,6 @@ export default function LoginPage() {
           return;
         }
         await register(name, email, password);
-        setMessage('登録が完了しました。ログインしてください。');
-        setMode('login');
         setPassword('');
         return;
       }
@@ -54,7 +50,6 @@ export default function LoginPage() {
     <main className="page">
       <section className="card">
         <h1 className="title">NoteHub</h1>
-        <p className="subtitle">共同編集エディタ</p>
 
         <div className="tabs">
           <button
@@ -63,7 +58,6 @@ export default function LoginPage() {
             onClick={() => {
               setMode('login');
               setError('');
-              setMessage('');
             }}
           >
             ログイン
@@ -74,14 +68,12 @@ export default function LoginPage() {
             onClick={() => {
               setMode('register');
               setError('');
-              setMessage('');
             }}
           >
             新規登録
           </button>
         </div>
 
-        {message ? <div className="success">{message}</div> : null}
         {error ? <div className="error">{error}</div> : null}
 
         <form onSubmit={handleSubmit}>
