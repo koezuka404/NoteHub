@@ -177,6 +177,19 @@ func main() {
 	defer batchCancel()
 	go batch.NewAutoSaveBatch(documentAutoSaveUseCase, cfg.DocumentAutosaveInterval).Run(batchCtx)
 
+	cleanupStore := appredis.NewCleanupStore(redisClient)
+	cleanupUseCase := usecase.NewCleanupUseCase(refreshTokenRepository, cleanupStore, cfg.RefreshTokenRetention)
+	go batch.NewCleanupBatch(cleanupUseCase, cfg.CleanupBatchInterval).Run(batchCtx)
+	if cfg.BackupEnabled {
+		backupUseCase := usecase.NewDatabaseBackupUseCase(
+			cfg.DatabaseURL,
+			cfg.BackupDirectory,
+			cfg.BackupRetention,
+			auditLogRepository,
+		)
+		go batch.NewBackupBatch(backupUseCase, cfg.BackupBatchInterval).Run(batchCtx)
+	}
+
 	authMiddleware := appmiddleware.NewAuthMiddleware(jwtService, userRepository, accessTokenRevocations)
 	csrfMiddleware := appmiddleware.NewCSRFMiddleware(appmiddleware.CSRFConfig{
 		CookieName: cfg.CSRFTokenCookieName,

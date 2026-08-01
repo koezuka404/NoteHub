@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
     replaced_by_id UUID NULL REFERENCES refresh_tokens(id),
     ip_address VARCHAR(45) NULL,
     user_agent TEXT NULL,
-    CONSTRAINT chk_refresh_tokens_status CHECK (status IN ('active','rotated','revoked'))
+    CONSTRAINT chk_refresh_tokens_status CHECK (status IN ('active','rotated','revoked','expired'))
 );
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_family_id ON refresh_tokens(family_id);

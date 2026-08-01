@@ -49,3 +49,30 @@ func (r *RefreshTokenRepository) RevokeFamily(ctx context.Context, familyID uuid
 	}
 	return nil
 }
+
+func (r *RefreshTokenRepository) MarkExpiredBefore(ctx context.Context, now time.Time) (int64, error) {
+	result := dbFromContext(ctx, r.db).Model(&entity.RefreshToken{}).
+		Where("expires_at < ? AND status IN ?", now, []entity.RefreshTokenStatus{
+			entity.RefreshTokenStatusActive,
+			entity.RefreshTokenStatusRotated,
+		}).
+		Updates(map[string]any{"status": entity.RefreshTokenStatusExpired, "updated_at": now})
+	if result.Error != nil {
+		return 0, fmt.Errorf("mark expired refresh tokens: %w", result.Error)
+	}
+	return result.RowsAffected, nil
+}
+
+func (r *RefreshTokenRepository) DeleteStaleBefore(ctx context.Context, cutoff time.Time) (int64, error) {
+	result := dbFromContext(ctx, r.db).
+		Where("status IN ? AND updated_at < ?", []entity.RefreshTokenStatus{
+			entity.RefreshTokenStatusExpired,
+			entity.RefreshTokenStatusRevoked,
+			entity.RefreshTokenStatusRotated,
+		}, cutoff).
+		Delete(&entity.RefreshToken{})
+	if result.Error != nil {
+		return 0, fmt.Errorf("delete stale refresh tokens: %w", result.Error)
+	}
+	return result.RowsAffected, nil
+}

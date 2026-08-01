@@ -18,8 +18,11 @@ type ApiErrorResponse = {
   error: ApiError;
 };
 
-export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function api<T>(path: string, init: RequestInit = {}, accessToken?: string | null): Promise<T> {
   const headers = new Headers(init.headers);
+  if (accessToken) {
+    headers.set('Authorization', `Bearer ${accessToken}`);
+  }
   if (init.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
@@ -99,6 +102,54 @@ export function me(accessToken: string) {
       Authorization: `Bearer ${accessToken}`,
     },
   });
+}
+
+export type WorkspaceListItem = {
+  id: string;
+  name: string;
+  hostId: string;
+  hostName: string;
+  role: string;
+  isAvailable: boolean;
+  unavailableReason: string;
+  updatedAt: string;
+};
+
+export type DocumentListItem = {
+  id: string;
+  title: string;
+  updatedBy: string;
+  updatedAt: string;
+};
+
+export function listWorkspaces(accessToken: string) {
+  return api<WorkspaceListItem[]>('/api/workspaces', {}, accessToken);
+}
+
+export function createWorkspace(accessToken: string, name: string) {
+  return api<{ id: string; name: string }>(
+    '/api/workspaces',
+    {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    },
+    accessToken,
+  );
+}
+
+export function listDocuments(accessToken: string, workspaceId: string) {
+  return api<DocumentListItem[]>(`/api/workspaces/${workspaceId}/documents`, {}, accessToken);
+}
+
+export function createDocument(accessToken: string, workspaceId: string, title: string) {
+  return api<{ id: string; title: string }>(
+    `/api/workspaces/${workspaceId}/documents`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ title }),
+    },
+    accessToken,
+  );
 }
 
 export function validatePassword(password: string): string | null {

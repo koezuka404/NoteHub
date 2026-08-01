@@ -70,6 +70,10 @@ func Migrate(gdb *gorm.DB) error {
 
 			`CREATE INDEX IF NOT EXISTS idx_document_versions_document_created
 			 ON document_versions (document_id, created_at DESC)`,
+
+			`ALTER TABLE refresh_tokens DROP CONSTRAINT IF EXISTS chk_refresh_tokens_status`,
+			`ALTER TABLE refresh_tokens ADD CONSTRAINT chk_refresh_tokens_status
+			 CHECK (status IN ('active','rotated','revoked','expired'))`,
 		}
 
 		for _, statement := range statements {

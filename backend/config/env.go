@@ -49,6 +49,13 @@ type Config struct {
 
 	WSMaxConnectionsPerDocument int
 	DocumentAutosaveInterval    time.Duration
+
+	CleanupBatchInterval  time.Duration
+	RefreshTokenRetention time.Duration
+	BackupEnabled         bool
+	BackupBatchInterval   time.Duration
+	BackupDirectory       string
+	BackupRetention       time.Duration
 }
 
 func Load() (*Config, error) {
@@ -94,6 +101,12 @@ func LoadFromEnv(getenv func(string) string) (*Config, error) {
 		RateLimitRefillRate:         floatValue(getenv("RATE_LIMIT_REFILL_PER_SECOND"), 1),
 		WSMaxConnectionsPerDocument: intValue(getenv("WS_MAX_CONNECTIONS_PER_DOCUMENT"), 3),
 		DocumentAutosaveInterval:    durationValue(getenv("DOCUMENT_AUTOSAVE_INTERVAL"), 5*time.Second),
+		CleanupBatchInterval:        durationValue(getenv("CLEANUP_BATCH_INTERVAL"), time.Hour),
+		RefreshTokenRetention:       durationValue(getenv("REFRESH_TOKEN_RETENTION"), 30*24*time.Hour),
+		BackupEnabled:               boolValue(getenv("BACKUP_ENABLED"), false),
+		BackupBatchInterval:         durationValue(getenv("BACKUP_BATCH_INTERVAL"), 24*time.Hour),
+		BackupDirectory:             valueOrDefault(getenv("BACKUP_DIR"), "./backups"),
+		BackupRetention:             durationValue(getenv("BACKUP_RETENTION"), 7*24*time.Hour),
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -163,6 +176,21 @@ func (c Config) Validate() error {
 	}
 	if c.DocumentAutosaveInterval < time.Second {
 		errs = append(errs, fmt.Errorf("DOCUMENT_AUTOSAVE_INTERVAL must be at least 1s"))
+	}
+	if c.CleanupBatchInterval < time.Minute {
+		errs = append(errs, fmt.Errorf("CLEANUP_BATCH_INTERVAL must be at least 1m"))
+	}
+	if c.RefreshTokenRetention < 24*time.Hour {
+		errs = append(errs, fmt.Errorf("REFRESH_TOKEN_RETENTION must be at least 24h"))
+	}
+	if c.BackupBatchInterval < time.Hour {
+		errs = append(errs, fmt.Errorf("BACKUP_BATCH_INTERVAL must be at least 1h"))
+	}
+	if c.BackupRetention < 24*time.Hour {
+		errs = append(errs, fmt.Errorf("BACKUP_RETENTION must be at least 24h"))
+	}
+	if c.BackupEnabled && strings.TrimSpace(c.BackupDirectory) == "" {
+		errs = append(errs, fmt.Errorf("BACKUP_DIR is required when BACKUP_ENABLED is true"))
 	}
 
 	if c.Environment == EnvironmentProduction {

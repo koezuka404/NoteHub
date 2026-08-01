@@ -20,12 +20,14 @@ const (
 	RefreshTokenStatusActive  RefreshTokenStatus = "active"
 	RefreshTokenStatusRotated RefreshTokenStatus = "rotated"
 	RefreshTokenStatusRevoked RefreshTokenStatus = "revoked"
+	RefreshTokenStatusExpired RefreshTokenStatus = "expired"
 )
 
 func (s RefreshTokenStatus) IsValid() bool {
 	return s == RefreshTokenStatusActive ||
 		s == RefreshTokenStatusRotated ||
-		s == RefreshTokenStatusRevoked
+		s == RefreshTokenStatusRevoked ||
+		s == RefreshTokenStatusExpired
 }
 
 type WorkspaceRole string

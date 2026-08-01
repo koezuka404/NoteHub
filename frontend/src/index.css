@@ -162,3 +162,179 @@ body {
 .loading {
   color: #6b7280;
 }
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.app-title {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.app-subtitle {
+  margin: 4px 0 0;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.header-button {
+  width: auto;
+  min-width: 120px;
+}
+
+.panel {
+  width: min(960px, 100%);
+  margin: 24px auto;
+  padding: 24px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+.panel-header {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.panel-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.app-error {
+  width: min(960px, calc(100% - 48px));
+  margin: 24px auto 0;
+}
+
+.inline-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.inline-form input {
+  flex: 1;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.compact-button {
+  width: auto;
+  min-width: 88px;
+}
+
+.item-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.list-button {
+  width: 100%;
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.list-button:hover:not(:disabled) {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.list-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.list-title {
+  font-weight: 600;
+}
+
+.list-meta {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.link-button {
+  border: none;
+  background: none;
+  padding: 0;
+  color: #2563eb;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.editor-panel {
+  width: min(1200px, calc(100% - 48px));
+}
+
+.editor-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.status-badge.online {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.status-badge.offline {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.editor-meta {
+  margin-bottom: 12px;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.editor-textarea {
+  width: 100%;
+  min-height: 420px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 16px;
+  font: 0.95rem/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  resize: vertical;
+}
+
+.editor-textarea:focus {
+  outline: 2px solid #2563eb;
+  border-color: #2563eb;
+}
