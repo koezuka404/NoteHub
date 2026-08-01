@@ -98,12 +98,27 @@ func main() {
 
 	workspaceRepository := repository.NewWorkspaceRepository(database)
 	workspaceMemberRepository := repository.NewWorkspaceMemberRepository(database)
+	documentRepository := repository.NewDocumentRepository(database)
+	versionRepository := repository.NewDocumentVersionRepository(database)
+	documentCache := appredis.NewDocumentCacheStore(redisClient)
+	lockStore := appredis.NewLockStore(redisClient)
+	documentAutoSaveUseCase := usecase.NewDocumentAutoSaveUseCase(
+		documentRepository,
+		versionRepository,
+		documentCache,
+		lockStore,
+		transactionManager,
+		30*time.Second,
+	)
+	documentFlushBatch := batch.NewDocumentFlushBatch(documentAutoSaveUseCase)
+
 	workspaceUseCase := usecase.NewWorkspaceUseCase(
 		userRepository,
 		workspaceRepository,
 		workspaceMemberRepository,
 		auditLogRepository,
 		transactionManager,
+		documentAutoSaveUseCase,
 	)
 	workspaceController := controller.NewWorkspaceController(workspaceUseCase)
 	memberUseCase := usecase.NewMemberUseCase(
@@ -115,8 +130,6 @@ func main() {
 	)
 	memberController := controller.NewMemberController(memberUseCase)
 
-	documentRepository := repository.NewDocumentRepository(database)
-	documentCache := appredis.NewDocumentCacheStore(redisClient)
 	wsSessionStore := appredis.NewWebSocketSessionStore(redisClient)
 	sessionTTL := cfg.AccessTokenTTL + time.Minute
 	documentEditorsStore := appredis.NewDocumentEditorsStore(redisClient, sessionTTL)
@@ -146,10 +159,10 @@ func main() {
 		transactionManager,
 		workspaceUseCase,
 		documentCache,
+		documentAutoSaveUseCase,
 	)
 	documentController := controller.NewDocumentController(documentUseCase)
 
-	versionRepository := repository.NewDocumentVersionRepository(database)
 	versionUseCase := usecase.NewVersionUseCase(
 		documentRepository,
 		versionRepository,
@@ -160,15 +173,6 @@ func main() {
 	)
 	versionController := controller.NewVersionController(versionUseCase)
 
-	lockStore := appredis.NewLockStore(redisClient)
-	documentAutoSaveUseCase := usecase.NewDocumentAutoSaveUseCase(
-		documentRepository,
-		versionRepository,
-		documentCache,
-		lockStore,
-		transactionManager,
-		30*time.Second,
-	)
 	batchCtx, batchCancel := context.WithCancel(context.Background())
 	defer batchCancel()
 	go batch.NewAutoSaveBatch(documentAutoSaveUseCase, cfg.DocumentAutosaveInterval).Run(batchCtx)
@@ -206,6 +210,11 @@ func main() {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
 	batchCancel()
+	flushCtx, flushCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	if err := documentFlushBatch.FlushAllDirty(flushCtx); err != nil {
+		log.Printf("shutdown document flush: %v", err)
+	}
+	flushCancel()
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 	if err := e.Shutdown(shutdownCtx); err != nil {

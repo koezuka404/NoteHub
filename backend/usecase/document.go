@@ -30,6 +30,7 @@ type DocumentUseCase struct {
 	transactions ITransactionManager
 	access       IAccessCheck
 	cache        IDocumentCache
+	flush        IDocumentFlushService
 	now          func() time.Time
 }
 
@@ -39,6 +40,7 @@ func NewDocumentUseCase(
 	transactions ITransactionManager,
 	access IAccessCheck,
 	cache IDocumentCache,
+	flush IDocumentFlushService,
 ) *DocumentUseCase {
 	return &DocumentUseCase{
 		docs:         docs,
@@ -46,6 +48,7 @@ func NewDocumentUseCase(
 		transactions: transactions,
 		access:       access,
 		cache:        cache,
+		flush:        flush,
 		now:          time.Now,
 	}
 }

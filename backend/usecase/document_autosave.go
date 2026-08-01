@@ -43,7 +43,13 @@ func NewDocumentAutoSaveUseCase(
 	}
 }
 
+var _ IDocumentFlushService = (*DocumentAutoSaveUseCase)(nil)
+
 func (uc *DocumentAutoSaveUseCase) RunOnce(ctx context.Context) error {
+	return uc.FlushAllDirty(ctx)
+}
+
+func (uc *DocumentAutoSaveUseCase) FlushAllDirty(ctx context.Context) error {
 	documentIDs, err := uc.cache.ListDirtyDocumentIDs(ctx)
 	if err != nil {
 		return fmt.Errorf("list dirty documents: %w", err)
@@ -56,7 +62,39 @@ func (uc *DocumentAutoSaveUseCase) RunOnce(ctx context.Context) error {
 	return nil
 }
 
+func (uc *DocumentAutoSaveUseCase) FlushDocument(ctx context.Context, documentID uuid.UUID) error {
+	dirty, err := uc.cache.IsDirty(ctx, documentID)
+	if err != nil {
+		return fmt.Errorf("check dirty flag: %w", err)
+	}
+	if !dirty {
+		return nil
+	}
+	return uc.persistDocument(ctx, documentID, entity.DocumentVersionManualSave)
+}
+
+func (uc *DocumentAutoSaveUseCase) FlushWorkspaceDocuments(ctx context.Context, workspaceID uuid.UUID) error {
+	docs, err := uc.docs.FindByWorkspaceID(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("list workspace documents: %w", err)
+	}
+	for _, doc := range docs {
+		if err := uc.FlushDocument(ctx, doc.ID); err != nil {
+			log.Printf("flush document %s before workspace delete: %v", doc.ID, err)
+		}
+	}
+	return nil
+}
+
 func (uc *DocumentAutoSaveUseCase) SaveDocument(ctx context.Context, documentID uuid.UUID) error {
+	return uc.persistDocument(ctx, documentID, entity.DocumentVersionAutoSave)
+}
+
+func (uc *DocumentAutoSaveUseCase) persistDocument(
+	ctx context.Context,
+	documentID uuid.UUID,
+	versionType entity.DocumentVersionType,
+) error {
 	dirty, err := uc.cache.IsDirty(ctx, documentID)
 	if err != nil {
 		return fmt.Errorf("check dirty flag: %w", err)
@@ -105,7 +143,7 @@ func (uc *DocumentAutoSaveUseCase) SaveDocument(ctx context.Context, documentID 
 	if err := uc.transactions.WithinTransaction(ctx, func(txCtx context.Context) error {
 		lockedDoc, docFound, err := uc.docs.FindByIDForUpdate(txCtx, documentID)
 		if err != nil {
-			return fmt.Errorf("find document for autosave: %w", err)
+			return fmt.Errorf("find document for persist: %w", err)
 		}
 		if !docFound {
 			return ErrDocumentNotFound
@@ -123,16 +161,16 @@ func (uc *DocumentAutoSaveUseCase) SaveDocument(ctx context.Context, documentID 
 		version, err := entity.NewDocumentVersion(
 			*lockedDoc,
 			state.Content,
-			entity.DocumentVersionAutoSave,
+			versionType,
 			state.UpdatedBy,
 			nil,
 			state.UpdatedAt.UTC(),
 		)
 		if err != nil {
-			return fmt.Errorf("create autosave version entity: %w", err)
+			return fmt.Errorf("create document version entity: %w", err)
 		}
 		if err := uc.versions.Create(txCtx, &version); err != nil {
-			return fmt.Errorf("save autosave version: %w", err)
+			return fmt.Errorf("save document version: %w", err)
 		}
 		return nil
 	}); err != nil {

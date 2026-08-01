@@ -35,6 +35,12 @@ func (uc *WorkspaceUseCase) DeleteWorkspace(ctx context.Context, input DeleteWor
 		return nil, err
 	}
 
+	if uc.flush != nil {
+		if err := uc.flush.FlushWorkspaceDocuments(ctx, input.WorkspaceID); err != nil {
+			return nil, fmt.Errorf("flush workspace documents before delete: %w", err)
+		}
+	}
+
 	now := uc.currentTime()
 	reason := strings.TrimSpace(input.Reason)
 	var output *DeleteWorkspaceOutput

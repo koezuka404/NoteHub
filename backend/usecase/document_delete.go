@@ -28,6 +28,12 @@ func (uc *DocumentUseCase) DeleteDocument(ctx context.Context, input DeleteDocum
 		return nil, err
 	}
 
+	if uc.flush != nil {
+		if err := uc.flush.FlushDocument(ctx, input.DocumentID); err != nil {
+			return nil, fmt.Errorf("flush document before delete: %w", err)
+		}
+	}
+
 	now := uc.currentTime()
 	var output *DeleteDocumentOutput
 

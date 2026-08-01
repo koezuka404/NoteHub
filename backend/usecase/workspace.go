@@ -42,6 +42,7 @@ type WorkspaceUseCase struct {
 	members      IWorkspaceMemberRepository
 	auditLogs    IAuditLogRepository
 	transactions ITransactionManager
+	flush        IDocumentFlushService
 	now          func() time.Time
 }
 
@@ -51,6 +52,7 @@ func NewWorkspaceUseCase(
 	members IWorkspaceMemberRepository,
 	auditLogs IAuditLogRepository,
 	transactions ITransactionManager,
+	flush IDocumentFlushService,
 ) *WorkspaceUseCase {
 	return &WorkspaceUseCase{
 		users:        users,
@@ -58,6 +60,7 @@ func NewWorkspaceUseCase(
 		members:      members,
 		auditLogs:    auditLogs,
 		transactions: transactions,
+		flush:        flush,
 		now:          time.Now,
 	}
 }
