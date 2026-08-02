@@ -78,5 +78,10 @@ func (uc *DocumentUseCase) DeleteDocument(ctx context.Context, input DeleteDocum
 			return nil, fmt.Errorf("clear document cache: %w", err)
 		}
 	}
+	if uc.notifier != nil {
+		if err := uc.notifier.NotifyDocumentDeleted(output.DocumentID, input.UserID, output.DeletedAt); err != nil {
+			return nil, fmt.Errorf("notify document deleted: %w", err)
+		}
+	}
 	return output, nil
 }

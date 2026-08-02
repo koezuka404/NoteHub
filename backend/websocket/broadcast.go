@@ -29,4 +29,32 @@ func (p *DocumentEventPublisher) NotifyDocumentRestored(documentID uuid.UUID, co
 	return nil
 }
 
+func (p *DocumentEventPublisher) NotifyDocumentDeleted(documentID, deletedBy uuid.UUID, deletedAt string) error {
+	payload, err := MarshalEvent(EventDocumentDeleted, DocumentDeletedData{
+		DocumentID: documentID.String(),
+		DeletedBy:  deletedBy.String(),
+		DeletedAt:  deletedAt,
+		Reason:     ReasonDocumentDeleted,
+	}, p.now())
+	if err != nil {
+		return err
+	}
+	p.hub.DisconnectDocument(documentID, payload)
+	return nil
+}
+
+func (p *DocumentEventPublisher) NotifyWorkspaceDeleted(workspaceID, deletedBy uuid.UUID, deletedAt string) error {
+	payload, err := MarshalEvent(EventWorkspaceDeleted, WorkspaceDeletedData{
+		WorkspaceID: workspaceID.String(),
+		DeletedBy:   deletedBy.String(),
+		DeletedAt:   deletedAt,
+		Reason:      ReasonWorkspaceDeleted,
+	}, p.now())
+	if err != nil {
+		return err
+	}
+	p.hub.DisconnectWorkspace(workspaceID, payload)
+	return nil
+}
+
 var _ usecase.IDocumentWebSocketNotifier = (*DocumentEventPublisher)(nil)

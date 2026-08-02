@@ -43,6 +43,7 @@ type WorkspaceUseCase struct {
 	auditLogs    IAuditLogRepository
 	transactions ITransactionManager
 	flush        IDocumentFlushService
+	notifier     IDocumentWebSocketNotifier
 	now          func() time.Time
 }
 
@@ -53,6 +54,7 @@ func NewWorkspaceUseCase(
 	auditLogs IAuditLogRepository,
 	transactions ITransactionManager,
 	flush IDocumentFlushService,
+	notifier IDocumentWebSocketNotifier,
 ) *WorkspaceUseCase {
 	return &WorkspaceUseCase{
 		users:        users,
@@ -61,6 +63,7 @@ func NewWorkspaceUseCase(
 		auditLogs:    auditLogs,
 		transactions: transactions,
 		flush:        flush,
+		notifier:     notifier,
 		now:          time.Now,
 	}
 }

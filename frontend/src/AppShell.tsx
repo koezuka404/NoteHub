@@ -278,6 +278,16 @@ function DocumentEditor({ accessToken, workspace, document, currentUserId, onBac
         remoteUpdateRef.current = true;
         setContent(nextContent);
       },
+      onDeleted: () => {
+        setWsError('このドキュメントは削除されました');
+        setConnected(false);
+        onBack();
+      },
+      onWorkspaceDeleted: () => {
+        setWsError('ワークスペースが削除されました');
+        setConnected(false);
+        onBack();
+      },
     });
 
     wsRef.current = connection;

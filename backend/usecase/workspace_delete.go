@@ -84,5 +84,10 @@ func (uc *WorkspaceUseCase) DeleteWorkspace(ctx context.Context, input DeleteWor
 	}); err != nil {
 		return nil, err
 	}
+	if uc.notifier != nil {
+		if err := uc.notifier.NotifyWorkspaceDeleted(output.WorkspaceID, input.UserID, output.DeletedAt); err != nil {
+			return nil, fmt.Errorf("notify workspace deleted: %w", err)
+		}
+	}
 	return output, nil
 }

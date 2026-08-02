@@ -112,6 +112,12 @@ func main() {
 	)
 	documentFlushBatch := batch.NewDocumentFlushBatch(documentAutoSaveUseCase)
 
+	wsSessionStore := appredis.NewWebSocketSessionStore(redisClient)
+	sessionTTL := cfg.AccessTokenTTL + time.Minute
+	documentEditorsStore := appredis.NewDocumentEditorsStore(redisClient, sessionTTL)
+	wsHub := appws.NewHub()
+	wsEventPublisher := appws.NewDocumentEventPublisher(wsHub)
+
 	workspaceUseCase := usecase.NewWorkspaceUseCase(
 		userRepository,
 		workspaceRepository,
@@ -119,6 +125,7 @@ func main() {
 		auditLogRepository,
 		transactionManager,
 		documentAutoSaveUseCase,
+		wsEventPublisher,
 	)
 	workspaceController := controller.NewWorkspaceController(workspaceUseCase)
 	memberUseCase := usecase.NewMemberUseCase(
@@ -130,11 +137,6 @@ func main() {
 	)
 	memberController := controller.NewMemberController(memberUseCase)
 
-	wsSessionStore := appredis.NewWebSocketSessionStore(redisClient)
-	sessionTTL := cfg.AccessTokenTTL + time.Minute
-	documentEditorsStore := appredis.NewDocumentEditorsStore(redisClient, sessionTTL)
-	wsHub := appws.NewHub()
-	wsEventPublisher := appws.NewDocumentEventPublisher(wsHub)
 	documentWebSocketUseCase := usecase.NewDocumentWebSocketUseCase(
 		documentRepository,
 		userRepository,
@@ -160,6 +162,7 @@ func main() {
 		workspaceUseCase,
 		documentCache,
 		documentAutoSaveUseCase,
+		wsEventPublisher,
 	)
 	documentController := controller.NewDocumentController(documentUseCase)
 

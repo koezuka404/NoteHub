@@ -14,7 +14,14 @@ const (
 	EventEditorLeft       = "editor_left"
 	EventEditorsSync      = "editors_sync"
 	EventDocumentRestored = "document_restored"
+	EventDocumentDeleted  = "document_deleted"
+	EventWorkspaceDeleted = "workspace_deleted"
 	EventError            = "error"
+)
+
+const (
+	ReasonDocumentDeleted  = "DOCUMENT_DELETED"
+	ReasonWorkspaceDeleted = "WORKSPACE_DELETED"
 )
 
 type Envelope struct {
@@ -70,6 +77,20 @@ type DocumentRestoredData struct {
 	DocumentID      string `json:"document_id"`
 	Content         string `json:"content"`
 	SourceVersionID string `json:"source_version_id"`
+}
+
+type DocumentDeletedData struct {
+	DocumentID string `json:"document_id"`
+	DeletedBy  string `json:"deleted_by"`
+	DeletedAt  string `json:"deleted_at"`
+	Reason     string `json:"reason"`
+}
+
+type WorkspaceDeletedData struct {
+	WorkspaceID string `json:"workspace_id"`
+	DeletedBy   string `json:"deleted_by"`
+	DeletedAt   string `json:"deleted_at"`
+	Reason      string `json:"reason"`
 }
 
 type ErrorData struct {

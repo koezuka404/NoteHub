@@ -19,6 +19,8 @@ type DocumentWsHandlers = {
   onEditorJoined?: (editor: EditorInfo) => void;
   onEditorLeft?: (editor: EditorInfo) => void;
   onRestored?: (content: string) => void;
+  onDeleted?: () => void;
+  onWorkspaceDeleted?: () => void;
 };
 
 function wsBaseUrl(): string {
@@ -117,6 +119,12 @@ export function connectDocumentWebSocket(
       }
       case 'document_restored':
         handlers.onRestored?.(String(envelope.data.content ?? ''));
+        break;
+      case 'document_deleted':
+        handlers.onDeleted?.();
+        break;
+      case 'workspace_deleted':
+        handlers.onWorkspaceDeleted?.();
         break;
       case 'error':
         handlers.onError?.(String(envelope.data.message ?? 'WebSocket エラー'));

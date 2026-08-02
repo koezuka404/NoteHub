@@ -31,6 +31,7 @@ type DocumentUseCase struct {
 	access       IAccessCheck
 	cache        IDocumentCache
 	flush        IDocumentFlushService
+	notifier     IDocumentWebSocketNotifier
 	now          func() time.Time
 }
 
@@ -41,6 +42,7 @@ func NewDocumentUseCase(
 	access IAccessCheck,
 	cache IDocumentCache,
 	flush IDocumentFlushService,
+	notifier IDocumentWebSocketNotifier,
 ) *DocumentUseCase {
 	return &DocumentUseCase{
 		docs:         docs,
@@ -49,6 +51,7 @@ func NewDocumentUseCase(
 		access:       access,
 		cache:        cache,
 		flush:        flush,
+		notifier:     notifier,
 		now:          time.Now,
 	}
 }
