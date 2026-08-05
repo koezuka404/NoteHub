@@ -2,6 +2,10 @@ package usecase
 
 import "errors"
 
+// helpers.go
+
+const timeFormat = "2006-01-02T15:04:05Z07:00"
+
 var (
 	ErrValidation             = errors.New("validation error")
 	ErrPasswordInvalid        = errors.New("password invalid")

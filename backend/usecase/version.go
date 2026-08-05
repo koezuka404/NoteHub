@@ -2,12 +2,11 @@ package usecase
 
 import (
 	"context"
+	"fmt"
 	"time"
-
 	"github.com/google/uuid"
 	"github.com/koezuka404/notehub/entity"
 )
-
 type IVersionUsecase interface {
 	ListVersions(ctx context.Context, input ListVersionsInput) ([]VersionListItem, error)
 	GetVersion(ctx context.Context, input GetVersionInput) (*GetVersionOutput, error)
@@ -84,4 +83,212 @@ func (uc *VersionUseCase) currentContent(ctx context.Context, doc *entity.Docume
 		}
 	}
 	return doc.Content, nil
+}
+
+// version_create.go
+
+type CreateVersionInput struct {
+	DocumentID  uuid.UUID
+	Content     string
+	CreatedBy   uuid.UUID
+	VersionType entity.DocumentVersionType
+}
+
+func (uc *VersionUseCase) CreateVersion(ctx context.Context, input CreateVersionInput) error {
+	doc, err := uc.loadDoc(ctx, input.DocumentID)
+	if err != nil {
+		return err
+	}
+
+	now := uc.currentTime()
+	version, err := entity.NewDocumentVersion(*doc, input.Content, input.VersionType, input.CreatedBy, nil, now)
+	if err != nil {
+		return fmt.Errorf("create document version entity: %w", err)
+	}
+	if err := uc.versions.Create(ctx, &version); err != nil {
+		return fmt.Errorf("save document version: %w", err)
+	}
+	return nil
+}
+
+// version_get.go
+
+type GetVersionInput struct {
+	UserID     uuid.UUID
+	DocumentID uuid.UUID
+	VersionID  uuid.UUID
+}
+
+type GetVersionOutput struct {
+	ID         uuid.UUID
+	DocumentID uuid.UUID
+	Content    string
+	Type       string
+	CreatedBy  uuid.UUID
+	CreatedAt  string
+}
+
+func (uc *VersionUseCase) GetVersion(ctx context.Context, input GetVersionInput) (*GetVersionOutput, error) {
+	doc, err := uc.loadDoc(ctx, input.DocumentID)
+	if err != nil {
+		return nil, err
+	}
+	if err := uc.authorizeDoc(ctx, input.UserID, doc); err != nil {
+		return nil, err
+	}
+
+	version, found, err := uc.versions.FindByID(ctx, input.VersionID)
+	if err != nil {
+		return nil, fmt.Errorf("find document version: %w", err)
+	}
+	if !found || version.DocumentID != input.DocumentID {
+		return nil, ErrVersionNotFound
+	}
+
+	return &GetVersionOutput{
+		ID:         version.ID,
+		DocumentID: version.DocumentID,
+		Content:    version.Content,
+		Type:       string(version.Type),
+		CreatedBy:  version.CreatedBy,
+		CreatedAt:  version.CreatedAt.Format(timeFormat),
+	}, nil
+}
+
+// version_list.go
+
+type ListVersionsInput struct {
+	UserID     uuid.UUID
+	DocumentID uuid.UUID
+}
+
+type VersionListItem struct {
+	ID        uuid.UUID
+	Type      string
+	CreatedBy uuid.UUID
+	CreatedAt string
+}
+
+func (uc *VersionUseCase) ListVersions(ctx context.Context, input ListVersionsInput) ([]VersionListItem, error) {
+	doc, err := uc.loadDoc(ctx, input.DocumentID)
+	if err != nil {
+		return nil, err
+	}
+	if err := uc.authorizeDoc(ctx, input.UserID, doc); err != nil {
+		return nil, err
+	}
+
+	versions, err := uc.versions.FindByDocumentID(ctx, input.DocumentID)
+	if err != nil {
+		return nil, fmt.Errorf("list document versions: %w", err)
+	}
+
+	items := make([]VersionListItem, 0, len(versions))
+	for _, v := range versions {
+		items = append(items, VersionListItem{
+			ID:        v.ID,
+			Type:      string(v.Type),
+			CreatedBy: v.CreatedBy,
+			CreatedAt: v.CreatedAt.Format(timeFormat),
+		})
+	}
+	return items, nil
+}
+
+// version_restore.go
+
+type RestoreVersionInput struct {
+	UserID     uuid.UUID
+	DocumentID uuid.UUID
+	VersionID  uuid.UUID
+}
+
+type RestoreVersionOutput struct {
+	DocumentID uuid.UUID
+	VersionID  uuid.UUID
+	RestoredAt string
+}
+
+func (uc *VersionUseCase) RestoreVersion(ctx context.Context, input RestoreVersionInput) (*RestoreVersionOutput, error) {
+	doc, err := uc.loadDoc(ctx, input.DocumentID)
+	if err != nil {
+		return nil, err
+	}
+	if err := uc.authorizeDoc(ctx, input.UserID, doc); err != nil {
+		return nil, err
+	}
+
+	target, found, err := uc.versions.FindByID(ctx, input.VersionID)
+	if err != nil {
+		return nil, fmt.Errorf("find restore version: %w", err)
+	}
+	if !found || target.DocumentID != input.DocumentID {
+		return nil, ErrVersionNotFound
+	}
+
+	currentContent, err := uc.currentContent(ctx, doc)
+	if err != nil {
+		return nil, fmt.Errorf("load current document content: %w", err)
+	}
+
+	now := uc.currentTime()
+	sourceID := target.ID
+	var output *RestoreVersionOutput
+
+	if err := uc.transactions.WithinTransaction(ctx, func(txCtx context.Context) error {
+		locked, found, err := uc.docs.FindByIDForUpdate(txCtx, input.DocumentID)
+		if err != nil {
+			return fmt.Errorf("find document for restore: %w", err)
+		}
+		if !found {
+			return ErrDocumentNotFound
+		}
+		if locked.IsDeleted() {
+			return ErrDocumentDeleted
+		}
+
+		before, err := entity.NewDocumentVersion(*locked, currentContent, entity.DocumentVersionBeforeRestore, input.UserID, nil, now)
+		if err != nil {
+			return fmt.Errorf("create before_restore version: %w", err)
+		}
+		if err := uc.versions.Create(txCtx, &before); err != nil {
+			return fmt.Errorf("save before_restore version: %w", err)
+		}
+
+		if err := locked.ReplaceContent(target.Content, input.UserID, locked.Revision, now); err != nil {
+			return err
+		}
+		if err := uc.docs.Update(txCtx, locked); err != nil {
+			return fmt.Errorf("update restored document: %w", err)
+		}
+
+		restored, err := entity.NewDocumentVersion(*locked, target.Content, entity.DocumentVersionRestore, input.UserID, &sourceID, now)
+		if err != nil {
+			return fmt.Errorf("create restore version: %w", err)
+		}
+		if err := uc.versions.Create(txCtx, &restored); err != nil {
+			return fmt.Errorf("save restore version: %w", err)
+		}
+
+		output = &RestoreVersionOutput{
+			DocumentID: locked.ID,
+			VersionID:  restored.ID,
+			RestoredAt: now.Format(timeFormat),
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	if uc.cache != nil {
+		if err := uc.cache.SetContent(ctx, output.DocumentID, target.Content, input.UserID, now); err != nil {
+			return nil, fmt.Errorf("update document cache after restore: %w", err)
+		}
+	}
+	if uc.notifier != nil {
+		if err := uc.notifier.NotifyDocumentRestored(output.DocumentID, target.Content, target.ID); err != nil {
+			return nil, fmt.Errorf("notify document restored: %w", err)
+		}
+	}
+	return output, nil
 }
