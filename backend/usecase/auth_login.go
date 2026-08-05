@@ -8,7 +8,6 @@ import (
 	"github.com/koezuka404/notehub/entity"
 )
 
-// dummyPasswordHash prevents timing attacks when the user does not exist.
 const dummyPasswordHash = "$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro4llC/.og/at2.uheWG/igi"
 
 type LoginInput struct {
@@ -66,7 +65,7 @@ func (uc *AuthUseCase) Login(ctx context.Context, input LoginInput) (*LoginOutpu
 		}
 	}
 
-	now := uc.now().UTC()
+	now := uc.now()
 	accessToken, expiresAt, err := uc.accessTokens.GenerateAccessToken(user.ID, user.AuthVersion, now)
 	if err != nil {
 		return nil, fmt.Errorf("generate access token: %w", err)

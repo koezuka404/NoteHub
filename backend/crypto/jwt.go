@@ -40,6 +40,7 @@ func NewJWTService(secret, issuer, audience string, accessTTL time.Duration) (*J
 	return &JWTService{secret: []byte(secret), issuer: strings.TrimSpace(issuer), audience: strings.TrimSpace(audience), accessTTL: accessTTL}, nil
 }
 
+// ログイン成功時にAccess Token（JWT）を発行する関数
 func (s *JWTService) GenerateAccessToken(userID uuid.UUID, authVersion uint, now time.Time) (string, time.Time, error) {
 	expiresAt := now.Add(s.accessTTL)
 	claims := jwt.MapClaims{
