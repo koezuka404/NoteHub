@@ -10,22 +10,30 @@ import (
 	"gorm.io/gorm"
 )
 
-type WorkspaceMemberRepository struct {
+type WorkspaceMemberRepository interface {
+	Create(ctx context.Context, member *entity.WorkspaceMember) error
+	FindByWorkspaceAndUser(ctx context.Context, workspaceID, userID uuid.UUID) (*entity.WorkspaceMember, bool, error)
+	FindByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]entity.WorkspaceMember, error)
+	Exists(ctx context.Context, workspaceID, userID uuid.UUID) (bool, error)
+	Delete(ctx context.Context, workspaceID, userID uuid.UUID) error
+}
+
+type workspaceMemberRepository struct {
 	db *gorm.DB
 }
 
-func NewWorkspaceMemberRepository(db *gorm.DB) *WorkspaceMemberRepository {
-	return &WorkspaceMemberRepository{db: db}
+func NewWorkspaceMemberRepository(db *gorm.DB) WorkspaceMemberRepository {
+	return &workspaceMemberRepository{db: db}
 }
 
-func (r *WorkspaceMemberRepository) Create(ctx context.Context, member *entity.WorkspaceMember) error {
+func (r *workspaceMemberRepository) Create(ctx context.Context, member *entity.WorkspaceMember) error {
 	if err := dbFromContext(ctx, r.db).Create(member).Error; err != nil {
 		return fmt.Errorf("insert workspace member: %w", err)
 	}
 	return nil
 }
 
-func (r *WorkspaceMemberRepository) FindByWorkspaceAndUser(ctx context.Context, workspaceID, userID uuid.UUID) (*entity.WorkspaceMember, bool, error) {
+func (r *workspaceMemberRepository) FindByWorkspaceAndUser(ctx context.Context, workspaceID, userID uuid.UUID) (*entity.WorkspaceMember, bool, error) {
 	var member entity.WorkspaceMember
 	err := dbFromContext(ctx, r.db).
 		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
@@ -39,7 +47,7 @@ func (r *WorkspaceMemberRepository) FindByWorkspaceAndUser(ctx context.Context, 
 	return &member, true, nil
 }
 
-func (r *WorkspaceMemberRepository) FindByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]entity.WorkspaceMember, error) {
+func (r *workspaceMemberRepository) FindByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]entity.WorkspaceMember, error) {
 	var members []entity.WorkspaceMember
 	if err := dbFromContext(ctx, r.db).
 		Where("workspace_id = ?", workspaceID).
@@ -50,7 +58,7 @@ func (r *WorkspaceMemberRepository) FindByWorkspaceID(ctx context.Context, works
 	return members, nil
 }
 
-func (r *WorkspaceMemberRepository) Exists(ctx context.Context, workspaceID, userID uuid.UUID) (bool, error) {
+func (r *workspaceMemberRepository) Exists(ctx context.Context, workspaceID, userID uuid.UUID) (bool, error) {
 	var count int64
 	if err := dbFromContext(ctx, r.db).
 		Model(&entity.WorkspaceMember{}).
@@ -61,7 +69,7 @@ func (r *WorkspaceMemberRepository) Exists(ctx context.Context, workspaceID, use
 	return count > 0, nil
 }
 
-func (r *WorkspaceMemberRepository) Delete(ctx context.Context, workspaceID, userID uuid.UUID) error {
+func (r *workspaceMemberRepository) Delete(ctx context.Context, workspaceID, userID uuid.UUID) error {
 	result := dbFromContext(ctx, r.db).
 		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
 		Delete(&entity.WorkspaceMember{})

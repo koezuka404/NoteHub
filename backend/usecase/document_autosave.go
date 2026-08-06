@@ -9,24 +9,25 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/koezuka404/notehub/entity"
+	"github.com/koezuka404/notehub/repository"
 )
 
 type DocumentAutoSaveUseCase struct {
-	docs         IDocumentRepository
-	versions     IVersionRepository
+	docs         repository.DocumentRepository
+	versions     repository.DocumentVersionRepository
 	cache        IDocumentCache
 	locks        IAutoSaveLockStore
-	transactions ITransactionManager
+	transactions repository.TransactionManager
 	lockTTL      time.Duration
 	now          func() time.Time
 }
 
 func NewDocumentAutoSaveUseCase(
-	docs IDocumentRepository,
-	versions IVersionRepository,
+	docs repository.DocumentRepository,
+	versions repository.DocumentVersionRepository,
 	cache IDocumentCache,
 	locks IAutoSaveLockStore,
-	transactions ITransactionManager,
+	transactions repository.TransactionManager,
 	lockTTL time.Duration,
 ) *DocumentAutoSaveUseCase {
 	if lockTTL <= 0 {

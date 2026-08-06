@@ -12,22 +12,30 @@ import (
 	"gorm.io/gorm"
 )
 
-type UserRepository struct {
+type UserRepository interface {
+	Create(ctx context.Context, user *entity.User) error
+	FindByID(ctx context.Context, id uuid.UUID) (*entity.User, bool, error)
+	FindByEmail(ctx context.Context, email string) (*entity.User, bool, error)
+	ExistsByEmail(ctx context.Context, email string) (bool, error)
+	IncrementAuthVersion(ctx context.Context, userID uuid.UUID, now time.Time) error
+}
+
+type userRepository struct {
 	db *gorm.DB
 }
 
-func NewUserRepository(db *gorm.DB) *UserRepository {
-	return &UserRepository{db: db}
+func NewUserRepository(db *gorm.DB) UserRepository {
+	return &userRepository{db: db}
 }
 
-func (r *UserRepository) Create(ctx context.Context, user *entity.User) error {
+func (r *userRepository) Create(ctx context.Context, user *entity.User) error {
 	if err := r.db.WithContext(ctx).Create(user).Error; err != nil {
 		return fmt.Errorf("insert user: %w", err)
 	}
 	return nil
 }
 
-func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*entity.User, bool, error) {
+func (r *userRepository) FindByEmail(ctx context.Context, email string) (*entity.User, bool, error) {
 	var user entity.User
 	err := r.db.WithContext(ctx).
 		Where("LOWER(email) = LOWER(?)", email).
@@ -43,7 +51,7 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*entity
 	return &user, true, nil
 }
 
-func (r *UserRepository) ExistsByEmail(ctx context.Context, email string) (bool, error) {
+func (r *userRepository) ExistsByEmail(ctx context.Context, email string) (bool, error) {
 	var count int64
 	if err := r.db.WithContext(ctx).
 		Model(&entity.User{}).
@@ -55,7 +63,7 @@ func (r *UserRepository) ExistsByEmail(ctx context.Context, email string) (bool,
 	return count > 0, nil
 }
 
-func (r *UserRepository) FindByID(ctx context.Context, id uuid.UUID) (*entity.User, bool, error) {
+func (r *userRepository) FindByID(ctx context.Context, id uuid.UUID) (*entity.User, bool, error) {
 	var user entity.User
 	err := dbFromContext(ctx, r.db).Where("id = ?", id).First(&user).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -67,7 +75,7 @@ func (r *UserRepository) FindByID(ctx context.Context, id uuid.UUID) (*entity.Us
 	return &user, true, nil
 }
 
-func (r *UserRepository) IncrementAuthVersion(ctx context.Context, userID uuid.UUID, now time.Time) error {
+func (r *userRepository) IncrementAuthVersion(ctx context.Context, userID uuid.UUID, now time.Time) error {
 	result := dbFromContext(ctx, r.db).Model(&entity.User{}).Where("id = ?", userID).Updates(map[string]any{
 		"auth_version": gorm.Expr("auth_version + 1"), "updated_at": now,
 	})

@@ -3,12 +3,14 @@ package usecase
 import (
 	"context"
 	"fmt"
+	"github.com/google/uuid"
+	"github.com/koezuka404/notehub/entity"
+	"github.com/koezuka404/notehub/repository"
 	"strings"
 	"time"
 	"unicode/utf8"
-	"github.com/google/uuid"
-	"github.com/koezuka404/notehub/entity"
 )
+
 // document_helpers.go
 
 const maxDocumentTitleLength = 100
@@ -20,14 +22,6 @@ type IDocumentUsecase interface {
 	GetDocument(ctx context.Context, input GetDocumentInput) (*GetDocumentOutput, error)
 	UpdateDocument(ctx context.Context, input UpdateDocumentInput) (*UpdateDocumentOutput, error)
 	DeleteDocument(ctx context.Context, input DeleteDocumentInput) (*DeleteDocumentOutput, error)
-}
-
-type IDocumentRepository interface {
-	Create(ctx context.Context, doc *entity.Document) error
-	FindByID(ctx context.Context, documentID uuid.UUID) (*entity.Document, bool, error)
-	FindByIDForUpdate(ctx context.Context, documentID uuid.UUID) (*entity.Document, bool, error)
-	FindByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]entity.Document, error)
-	Update(ctx context.Context, doc *entity.Document) error
 }
 
 // document_cache.go
@@ -70,9 +64,9 @@ type IDocumentWebSocketNotifier interface {
 }
 
 type DocumentUseCase struct {
-	docs         IDocumentRepository
-	auditLogs    IAuditLogRepository
-	transactions ITransactionManager
+	docs         repository.DocumentRepository
+	auditLogs    repository.AuditLogRepository
+	transactions repository.TransactionManager
 	access       IAccessCheck
 	cache        IDocumentCache
 	flush        IDocumentFlushService
@@ -81,9 +75,9 @@ type DocumentUseCase struct {
 }
 
 func NewDocumentUseCase(
-	docs IDocumentRepository,
-	auditLogs IAuditLogRepository,
-	transactions ITransactionManager,
+	docs repository.DocumentRepository,
+	auditLogs repository.AuditLogRepository,
+	transactions repository.TransactionManager,
 	access IAccessCheck,
 	cache IDocumentCache,
 	flush IDocumentFlushService,

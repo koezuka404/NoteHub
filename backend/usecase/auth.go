@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/koezuka404/notehub/entity"
+	"github.com/koezuka404/notehub/repository"
 )
 
 const (
@@ -19,25 +20,6 @@ const (
 	minPasswordLength = 8
 	maxPasswordLength = 15
 )
-
-type IUserRepository interface {
-	Create(ctx context.Context, user *entity.User) error
-	FindByID(ctx context.Context, id uuid.UUID) (user *entity.User, found bool, err error)
-	FindByEmail(ctx context.Context, email string) (user *entity.User, found bool, err error)
-	ExistsByEmail(ctx context.Context, email string) (bool, error)
-	IncrementAuthVersion(ctx context.Context, userID uuid.UUID, now time.Time) error
-}
-
-type IRefreshTokenRepository interface {
-	Create(ctx context.Context, token *entity.RefreshToken) error
-	FindByHashForUpdate(ctx context.Context, tokenHash string) (token *entity.RefreshToken, found bool, err error)
-	Update(ctx context.Context, token *entity.RefreshToken) error
-	RevokeFamily(ctx context.Context, familyID uuid.UUID, now time.Time) error
-}
-
-type IAuditLogRepository interface {
-	Create(ctx context.Context, log *entity.AuditLog) error
-}
 
 type IAuthService interface {
 	//IPasswordService
@@ -68,21 +50,21 @@ type IAuthUsecase interface {
 }
 
 type AuthUseCase struct {
-	users           IUserRepository
-	refreshTokens   IRefreshTokenRepository
-	auditLogs       IAuditLogRepository
+	users           repository.UserRepository
+	refreshTokens   repository.RefreshTokenRepository
+	auditLogs       repository.AuditLogRepository
 	auth            IAuthService // IPasswordService, IAccessTokenService, IRandomTokenService, ITokenHashService, IAccessTokenRevocationStore, ILoginFailureStore
-	transactions    ITransactionManager
+	transactions    repository.TransactionManager
 	refreshTokenTTL time.Duration
 	now             func() time.Time
 }
 
 func NewAuthUseCase(
-	users IUserRepository,
-	refreshTokens IRefreshTokenRepository,
-	auditLogs IAuditLogRepository,
+	users repository.UserRepository,
+	refreshTokens repository.RefreshTokenRepository,
+	auditLogs repository.AuditLogRepository,
 	auth IAuthService,
-	transactions ITransactionManager,
+	transactions repository.TransactionManager,
 	refreshTokenTTL time.Duration,
 ) *AuthUseCase {
 	return &AuthUseCase{

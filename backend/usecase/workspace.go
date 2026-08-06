@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
+	"github.com/koezuka404/notehub/entity"
+	"github.com/koezuka404/notehub/repository"
 	"strings"
 	"time"
 	"unicode/utf8"
-	"github.com/google/uuid"
-	"github.com/koezuka404/notehub/entity"
 )
+
 const (
 	maxWorkspaceNameLength   = 100
 	minDeleteReasonLength    = 1
@@ -27,43 +29,23 @@ type IWorkspaceUsecase interface {
 	DeleteWorkspace(ctx context.Context, input DeleteWorkspaceInput) (*DeleteWorkspaceOutput, error)
 }
 
-type IWorkspaceRepository interface {
-	Create(ctx context.Context, workspace *entity.Workspace) error
-	FindByID(ctx context.Context, workspaceID uuid.UUID) (*entity.Workspace, bool, error)
-	FindByIDForUpdate(ctx context.Context, workspaceID uuid.UUID) (*entity.Workspace, bool, error)
-	FindByUserID(ctx context.Context, userID uuid.UUID) ([]entity.Workspace, error)
-	Update(ctx context.Context, workspace *entity.Workspace) error
-}
-
-type IWorkspaceMemberRepository interface {
-	Create(ctx context.Context, member *entity.WorkspaceMember) error
-	FindByWorkspaceAndUser(ctx context.Context, workspaceID, userID uuid.UUID) (*entity.WorkspaceMember, bool, error)
-	FindByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]entity.WorkspaceMember, error)
-	Exists(ctx context.Context, workspaceID, userID uuid.UUID) (bool, error)
-	Delete(ctx context.Context, workspaceID, userID uuid.UUID) error
-}
-
-type IWorkspaceUserRepository interface {
-	FindByID(ctx context.Context, id uuid.UUID) (*entity.User, bool, error)
-}
-
 type WorkspaceUseCase struct {
-	users        IWorkspaceUserRepository
-	workspaces   IWorkspaceRepository
-	members      IWorkspaceMemberRepository
-	auditLogs    IAuditLogRepository
-	transactions ITransactionManager
+	users        repository.UserRepository
+	workspaces   repository.WorkspaceRepository
+	members      repository.WorkspaceMemberRepository
+	auditLogs    repository.AuditLogRepository
+	transactions repository.TransactionManager
 	flush        IDocumentFlushService
 	notifier     IDocumentWebSocketNotifier
 	now          func() time.Time
 }
 
 func NewWorkspaceUseCase(
-	users IWorkspaceUserRepository,
-	workspaces IWorkspaceRepository,
-	members IWorkspaceMemberRepository,
-	auditLogs IAuditLogRepository,
-	transactions ITransactionManager,
+	users repository.UserRepository,
+	workspaces repository.WorkspaceRepository,
+	members repository.WorkspaceMemberRepository,
+	auditLogs repository.AuditLogRepository,
+	transactions repository.TransactionManager,
 	flush IDocumentFlushService,
 	notifier IDocumentWebSocketNotifier,
 ) *WorkspaceUseCase {

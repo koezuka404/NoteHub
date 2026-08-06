@@ -11,22 +11,30 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-type WorkspaceRepository struct {
+type WorkspaceRepository interface {
+	Create(ctx context.Context, workspace *entity.Workspace) error
+	FindByID(ctx context.Context, workspaceID uuid.UUID) (*entity.Workspace, bool, error)
+	FindByIDForUpdate(ctx context.Context, workspaceID uuid.UUID) (*entity.Workspace, bool, error)
+	FindByUserID(ctx context.Context, userID uuid.UUID) ([]entity.Workspace, error)
+	Update(ctx context.Context, workspace *entity.Workspace) error
+}
+
+type workspaceRepository struct {
 	db *gorm.DB
 }
 
-func NewWorkspaceRepository(db *gorm.DB) *WorkspaceRepository {
-	return &WorkspaceRepository{db: db}
+func NewWorkspaceRepository(db *gorm.DB) WorkspaceRepository {
+	return &workspaceRepository{db: db}
 }
 
-func (r *WorkspaceRepository) Create(ctx context.Context, workspace *entity.Workspace) error {
+func (r *workspaceRepository) Create(ctx context.Context, workspace *entity.Workspace) error {
 	if err := dbFromContext(ctx, r.db).Create(workspace).Error; err != nil {
 		return fmt.Errorf("insert workspace: %w", err)
 	}
 	return nil
 }
 
-func (r *WorkspaceRepository) FindByID(ctx context.Context, workspaceID uuid.UUID) (*entity.Workspace, bool, error) {
+func (r *workspaceRepository) FindByID(ctx context.Context, workspaceID uuid.UUID) (*entity.Workspace, bool, error) {
 	var workspace entity.Workspace
 	err := dbFromContext(ctx, r.db).Where("id = ?", workspaceID).First(&workspace).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -38,7 +46,7 @@ func (r *WorkspaceRepository) FindByID(ctx context.Context, workspaceID uuid.UUI
 	return &workspace, true, nil
 }
 
-func (r *WorkspaceRepository) FindByIDForUpdate(ctx context.Context, workspaceID uuid.UUID) (*entity.Workspace, bool, error) {
+func (r *workspaceRepository) FindByIDForUpdate(ctx context.Context, workspaceID uuid.UUID) (*entity.Workspace, bool, error) {
 	var workspace entity.Workspace
 	err := dbFromContext(ctx, r.db).
 		Clauses(clause.Locking{Strength: "UPDATE"}).
@@ -53,7 +61,7 @@ func (r *WorkspaceRepository) FindByIDForUpdate(ctx context.Context, workspaceID
 	return &workspace, true, nil
 }
 
-func (r *WorkspaceRepository) FindByHostID(ctx context.Context, hostID uuid.UUID) ([]entity.Workspace, error) {
+func (r *workspaceRepository) FindByHostID(ctx context.Context, hostID uuid.UUID) ([]entity.Workspace, error) {
 	var workspaces []entity.Workspace
 	if err := dbFromContext(ctx, r.db).
 		Where("host_id = ? AND deleted_at IS NULL", hostID).
@@ -64,7 +72,7 @@ func (r *WorkspaceRepository) FindByHostID(ctx context.Context, hostID uuid.UUID
 	return workspaces, nil
 }
 
-func (r *WorkspaceRepository) FindByUserID(ctx context.Context, userID uuid.UUID) ([]entity.Workspace, error) {
+func (r *workspaceRepository) FindByUserID(ctx context.Context, userID uuid.UUID) ([]entity.Workspace, error) {
 	var workspaces []entity.Workspace
 	if err := dbFromContext(ctx, r.db).
 		Joins("INNER JOIN workspace_members ON workspace_members.workspace_id = workspaces.id").
@@ -76,7 +84,7 @@ func (r *WorkspaceRepository) FindByUserID(ctx context.Context, userID uuid.UUID
 	return workspaces, nil
 }
 
-func (r *WorkspaceRepository) Update(ctx context.Context, workspace *entity.Workspace) error {
+func (r *workspaceRepository) Update(ctx context.Context, workspace *entity.Workspace) error {
 	if err := dbFromContext(ctx, r.db).Save(workspace).Error; err != nil {
 		return fmt.Errorf("update workspace: %w", err)
 	}

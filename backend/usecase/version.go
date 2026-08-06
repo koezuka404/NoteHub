@@ -3,10 +3,12 @@ package usecase
 import (
 	"context"
 	"fmt"
-	"time"
 	"github.com/google/uuid"
 	"github.com/koezuka404/notehub/entity"
+	"github.com/koezuka404/notehub/repository"
+	"time"
 )
+
 type IVersionUsecase interface {
 	ListVersions(ctx context.Context, input ListVersionsInput) ([]VersionListItem, error)
 	GetVersion(ctx context.Context, input GetVersionInput) (*GetVersionOutput, error)
@@ -14,16 +16,10 @@ type IVersionUsecase interface {
 	RestoreVersion(ctx context.Context, input RestoreVersionInput) (*RestoreVersionOutput, error)
 }
 
-type IVersionRepository interface {
-	Create(ctx context.Context, version *entity.DocumentVersion) error
-	FindByID(ctx context.Context, versionID uuid.UUID) (*entity.DocumentVersion, bool, error)
-	FindByDocumentID(ctx context.Context, documentID uuid.UUID) ([]entity.DocumentVersion, error)
-}
-
 type VersionUseCase struct {
-	docs         IDocumentRepository
-	versions     IVersionRepository
-	transactions ITransactionManager
+	docs         repository.DocumentRepository
+	versions     repository.DocumentVersionRepository
+	transactions repository.TransactionManager
 	access       IAccessCheck
 	cache        IDocumentCache
 	notifier     IDocumentWebSocketNotifier
@@ -31,9 +27,9 @@ type VersionUseCase struct {
 }
 
 func NewVersionUseCase(
-	docs IDocumentRepository,
-	versions IVersionRepository,
-	transactions ITransactionManager,
+	docs repository.DocumentRepository,
+	versions repository.DocumentVersionRepository,
+	transactions repository.TransactionManager,
 	access IAccessCheck,
 	cache IDocumentCache,
 	notifier IDocumentWebSocketNotifier,

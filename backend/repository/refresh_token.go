@@ -12,18 +12,29 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-type RefreshTokenRepository struct{ db *gorm.DB }
-
-func NewRefreshTokenRepository(db *gorm.DB) *RefreshTokenRepository {
-	return &RefreshTokenRepository{db: db}
+type RefreshTokenRepository interface {
+	Create(ctx context.Context, token *entity.RefreshToken) error
+	FindByHashForUpdate(ctx context.Context, tokenHash string) (*entity.RefreshToken, bool, error)
+	Update(ctx context.Context, token *entity.RefreshToken) error
+	RevokeFamily(ctx context.Context, familyID uuid.UUID, now time.Time) error
+	MarkExpiredBefore(ctx context.Context, now time.Time) (int64, error)
+	DeleteStaleBefore(ctx context.Context, cutoff time.Time) (int64, error)
 }
-func (r *RefreshTokenRepository) Create(ctx context.Context, token *entity.RefreshToken) error {
+
+type refreshTokenRepository struct{ db *gorm.DB }
+
+func NewRefreshTokenRepository(db *gorm.DB) RefreshTokenRepository {
+	return &refreshTokenRepository{db: db}
+}
+
+func (r *refreshTokenRepository) Create(ctx context.Context, token *entity.RefreshToken) error {
 	if err := dbFromContext(ctx, r.db).Create(token).Error; err != nil {
 		return fmt.Errorf("insert refresh token: %w", err)
 	}
 	return nil
 }
-func (r *RefreshTokenRepository) FindByHashForUpdate(ctx context.Context, hash string) (*entity.RefreshToken, bool, error) {
+
+func (r *refreshTokenRepository) FindByHashForUpdate(ctx context.Context, hash string) (*entity.RefreshToken, bool, error) {
 	var token entity.RefreshToken
 	err := dbFromContext(ctx, r.db).Clauses(clause.Locking{Strength: "UPDATE"}).Where("token_hash = ?", hash).First(&token).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -34,13 +45,15 @@ func (r *RefreshTokenRepository) FindByHashForUpdate(ctx context.Context, hash s
 	}
 	return &token, true, nil
 }
-func (r *RefreshTokenRepository) Update(ctx context.Context, token *entity.RefreshToken) error {
+
+func (r *refreshTokenRepository) Update(ctx context.Context, token *entity.RefreshToken) error {
 	if err := dbFromContext(ctx, r.db).Save(token).Error; err != nil {
 		return fmt.Errorf("update refresh token: %w", err)
 	}
 	return nil
 }
-func (r *RefreshTokenRepository) RevokeFamily(ctx context.Context, familyID uuid.UUID, now time.Time) error {
+
+func (r *refreshTokenRepository) RevokeFamily(ctx context.Context, familyID uuid.UUID, now time.Time) error {
 	result := dbFromContext(ctx, r.db).Model(&entity.RefreshToken{}).
 		Where("family_id = ? AND status = ?", familyID, entity.RefreshTokenStatusActive).
 		Updates(map[string]any{"status": entity.RefreshTokenStatusRevoked, "revoked_at": now, "updated_at": now})
@@ -50,7 +63,7 @@ func (r *RefreshTokenRepository) RevokeFamily(ctx context.Context, familyID uuid
 	return nil
 }
 
-func (r *RefreshTokenRepository) MarkExpiredBefore(ctx context.Context, now time.Time) (int64, error) {
+func (r *refreshTokenRepository) MarkExpiredBefore(ctx context.Context, now time.Time) (int64, error) {
 	result := dbFromContext(ctx, r.db).Model(&entity.RefreshToken{}).
 		Where("expires_at < ? AND status IN ?", now, []entity.RefreshTokenStatus{
 			entity.RefreshTokenStatusActive,
@@ -63,7 +76,7 @@ func (r *RefreshTokenRepository) MarkExpiredBefore(ctx context.Context, now time
 	return result.RowsAffected, nil
 }
 
-func (r *RefreshTokenRepository) DeleteStaleBefore(ctx context.Context, cutoff time.Time) (int64, error) {
+func (r *refreshTokenRepository) DeleteStaleBefore(ctx context.Context, cutoff time.Time) (int64, error) {
 	result := dbFromContext(ctx, r.db).
 		Where("status IN ? AND updated_at < ?", []entity.RefreshTokenStatus{
 			entity.RefreshTokenStatusExpired,

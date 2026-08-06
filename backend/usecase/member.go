@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/mail"
-	"time"
 	"github.com/google/uuid"
 	"github.com/koezuka404/notehub/entity"
+	"github.com/koezuka404/notehub/repository"
 	"gorm.io/gorm"
+	"net/mail"
+	"time"
 )
+
 const deletedName = "削除済みユーザー"
 
 type IMemberUsecase interface {
@@ -19,29 +21,24 @@ type IMemberUsecase interface {
 	RemoveMember(ctx context.Context, input RemoveMemberInput) error
 }
 
-type IMemberUserRepository interface {
-	FindByID(ctx context.Context, id uuid.UUID) (*entity.User, bool, error)
-	FindByEmail(ctx context.Context, email string) (*entity.User, bool, error)
-}
-
 type IAccessCheck interface {
 	CheckWorkspaceAccess(ctx context.Context, input CheckWorkspaceAccessInput) (*WorkspaceAccessResult, error)
 }
 
 type MemberUseCase struct {
-	users        IMemberUserRepository
-	members      IWorkspaceMemberRepository
-	auditLogs    IAuditLogRepository
-	transactions ITransactionManager
+	users        repository.UserRepository
+	members      repository.WorkspaceMemberRepository
+	auditLogs    repository.AuditLogRepository
+	transactions repository.TransactionManager
 	access       IAccessCheck
 	now          func() time.Time
 }
 
 func NewMemberUseCase(
-	users IMemberUserRepository,
-	members IWorkspaceMemberRepository,
-	auditLogs IAuditLogRepository,
-	transactions ITransactionManager,
+	users repository.UserRepository,
+	members repository.WorkspaceMemberRepository,
+	auditLogs repository.AuditLogRepository,
+	transactions repository.TransactionManager,
 	access IAccessCheck,
 ) *MemberUseCase {
 	return &MemberUseCase{

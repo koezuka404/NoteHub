@@ -11,22 +11,30 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-type DocumentRepository struct {
+type DocumentRepository interface {
+	Create(ctx context.Context, doc *entity.Document) error
+	FindByID(ctx context.Context, documentID uuid.UUID) (*entity.Document, bool, error)
+	FindByIDForUpdate(ctx context.Context, documentID uuid.UUID) (*entity.Document, bool, error)
+	FindByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]entity.Document, error)
+	Update(ctx context.Context, doc *entity.Document) error
+}
+
+type documentRepository struct {
 	db *gorm.DB
 }
 
-func NewDocumentRepository(db *gorm.DB) *DocumentRepository {
-	return &DocumentRepository{db: db}
+func NewDocumentRepository(db *gorm.DB) DocumentRepository {
+	return &documentRepository{db: db}
 }
 
-func (r *DocumentRepository) Create(ctx context.Context, doc *entity.Document) error {
+func (r *documentRepository) Create(ctx context.Context, doc *entity.Document) error {
 	if err := dbFromContext(ctx, r.db).Create(doc).Error; err != nil {
 		return fmt.Errorf("insert document: %w", err)
 	}
 	return nil
 }
 
-func (r *DocumentRepository) FindByID(ctx context.Context, documentID uuid.UUID) (*entity.Document, bool, error) {
+func (r *documentRepository) FindByID(ctx context.Context, documentID uuid.UUID) (*entity.Document, bool, error) {
 	var doc entity.Document
 	err := dbFromContext(ctx, r.db).Where("id = ?", documentID).First(&doc).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -38,7 +46,7 @@ func (r *DocumentRepository) FindByID(ctx context.Context, documentID uuid.UUID)
 	return &doc, true, nil
 }
 
-func (r *DocumentRepository) FindByIDForUpdate(ctx context.Context, documentID uuid.UUID) (*entity.Document, bool, error) {
+func (r *documentRepository) FindByIDForUpdate(ctx context.Context, documentID uuid.UUID) (*entity.Document, bool, error) {
 	var doc entity.Document
 	err := dbFromContext(ctx, r.db).
 		Clauses(clause.Locking{Strength: "UPDATE"}).
@@ -53,7 +61,7 @@ func (r *DocumentRepository) FindByIDForUpdate(ctx context.Context, documentID u
 	return &doc, true, nil
 }
 
-func (r *DocumentRepository) FindByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]entity.Document, error) {
+func (r *documentRepository) FindByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]entity.Document, error) {
 	var docs []entity.Document
 	if err := dbFromContext(ctx, r.db).
 		Where("workspace_id = ? AND deleted_at IS NULL", workspaceID).
@@ -64,7 +72,7 @@ func (r *DocumentRepository) FindByWorkspaceID(ctx context.Context, workspaceID 
 	return docs, nil
 }
 
-func (r *DocumentRepository) Update(ctx context.Context, doc *entity.Document) error {
+func (r *documentRepository) Update(ctx context.Context, doc *entity.Document) error {
 	if err := dbFromContext(ctx, r.db).Save(doc).Error; err != nil {
 		return fmt.Errorf("update document: %w", err)
 	}

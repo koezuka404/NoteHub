@@ -74,7 +74,7 @@ func main() {
 	accessTokenRevocations := appredis.NewAccessTokenRevocationStore(redisClient)
 	loginFailures := appredis.NewLoginFailureStore(redisClient, cfg.LoginMaxFailures, cfg.LoginFailureWindow, cfg.LoginLockDuration)
 	tokenBuckets := appredis.NewTokenBucketStore(redisClient)
-	transactionManager := usecase.NewTransactionManager(database)
+	transactionManager := repository.NewTransactionManager(database)
 
 	authService := authservice.NewAuthService(
 		infrcrypto.NewPasswordService(cfg.BcryptCost), //IPasswordService

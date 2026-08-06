@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/koezuka404/notehub/entity"
+	"github.com/koezuka404/notehub/repository"
 )
 
 type DocumentEditorInfo struct {
@@ -34,8 +35,8 @@ type IDocumentWebSocketUsecase interface {
 }
 
 type DocumentWebSocketUseCase struct {
-	docs         IDocumentRepository
-	users        IUserRepository
+	docs         repository.DocumentRepository
+	users        repository.UserRepository
 	cache        IDocumentCache
 	sessions     IWebSocketSessionStore
 	editors      IDocumentEditorsStore
@@ -46,8 +47,8 @@ type DocumentWebSocketUseCase struct {
 }
 
 func NewDocumentWebSocketUseCase(
-	docs IDocumentRepository,
-	users IUserRepository,
+	docs repository.DocumentRepository,
+	users repository.UserRepository,
 	cache IDocumentCache,
 	sessions IWebSocketSessionStore,
 	editors IDocumentEditorsStore,

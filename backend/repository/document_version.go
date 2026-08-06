@@ -10,22 +10,28 @@ import (
 	"gorm.io/gorm"
 )
 
-type DocumentVersionRepository struct {
+type DocumentVersionRepository interface {
+	Create(ctx context.Context, version *entity.DocumentVersion) error
+	FindByID(ctx context.Context, versionID uuid.UUID) (*entity.DocumentVersion, bool, error)
+	FindByDocumentID(ctx context.Context, documentID uuid.UUID) ([]entity.DocumentVersion, error)
+}
+
+type documentVersionRepository struct {
 	db *gorm.DB
 }
 
-func NewDocumentVersionRepository(db *gorm.DB) *DocumentVersionRepository {
-	return &DocumentVersionRepository{db: db}
+func NewDocumentVersionRepository(db *gorm.DB) DocumentVersionRepository {
+	return &documentVersionRepository{db: db}
 }
 
-func (r *DocumentVersionRepository) Create(ctx context.Context, version *entity.DocumentVersion) error {
+func (r *documentVersionRepository) Create(ctx context.Context, version *entity.DocumentVersion) error {
 	if err := dbFromContext(ctx, r.db).Create(version).Error; err != nil {
 		return fmt.Errorf("insert document version: %w", err)
 	}
 	return nil
 }
 
-func (r *DocumentVersionRepository) FindByID(ctx context.Context, versionID uuid.UUID) (*entity.DocumentVersion, bool, error) {
+func (r *documentVersionRepository) FindByID(ctx context.Context, versionID uuid.UUID) (*entity.DocumentVersion, bool, error) {
 	var version entity.DocumentVersion
 	err := dbFromContext(ctx, r.db).Where("id = ?", versionID).First(&version).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -37,7 +43,7 @@ func (r *DocumentVersionRepository) FindByID(ctx context.Context, versionID uuid
 	return &version, true, nil
 }
 
-func (r *DocumentVersionRepository) FindByDocumentID(ctx context.Context, documentID uuid.UUID) ([]entity.DocumentVersion, error) {
+func (r *documentVersionRepository) FindByDocumentID(ctx context.Context, documentID uuid.UUID) ([]entity.DocumentVersion, error) {
 	var versions []entity.DocumentVersion
 	if err := dbFromContext(ctx, r.db).
 		Where("document_id = ?", documentID).

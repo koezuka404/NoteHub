@@ -4,34 +4,31 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/koezuka404/notehub/entity"
+	"github.com/koezuka404/notehub/repository"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
-	"github.com/koezuka404/notehub/entity"
 )
-// cleanup.go
 
-type ICleanupRefreshTokenRepository interface {
-	MarkExpiredBefore(ctx context.Context, now time.Time) (int64, error)
-	DeleteStaleBefore(ctx context.Context, cutoff time.Time) (int64, error)
-}
+// cleanup.go
 
 type ICleanupRedisStore interface {
 	CleanupEphemeralKeys(ctx context.Context) (int, error)
 }
 
 type CleanupUseCase struct {
-	refreshTokens ICleanupRefreshTokenRepository
+	refreshTokens repository.RefreshTokenRepository
 	redis         ICleanupRedisStore
 	retention     time.Duration
 	now           func() time.Time
 }
 
 func NewCleanupUseCase(
-	refreshTokens ICleanupRefreshTokenRepository,
+	refreshTokens repository.RefreshTokenRepository,
 	redis ICleanupRedisStore,
 	retention time.Duration,
 ) *CleanupUseCase {
@@ -76,18 +73,13 @@ func (u *CleanupUseCase) RunOnce(ctx context.Context) error {
 	return nil
 }
 
-
 // database_backup.go
-
-type IBackupAuditLogRepository interface {
-	Create(ctx context.Context, log *entity.AuditLog) error
-}
 
 type DatabaseBackupUseCase struct {
 	databaseURL string
 	backupDir   string
 	retention   time.Duration
-	audit       IBackupAuditLogRepository
+	audit       repository.AuditLogRepository
 	now         func() time.Time
 }
 
@@ -95,7 +87,7 @@ func NewDatabaseBackupUseCase(
 	databaseURL string,
 	backupDir string,
 	retention time.Duration,
-	audit IBackupAuditLogRepository,
+	audit repository.AuditLogRepository,
 ) *DatabaseBackupUseCase {
 	if retention <= 0 {
 		retention = 7 * 24 * time.Hour
@@ -194,4 +186,3 @@ func (u *DatabaseBackupUseCase) pruneOldBackups(now time.Time) (int, error) {
 	}
 	return removed, nil
 }
-
