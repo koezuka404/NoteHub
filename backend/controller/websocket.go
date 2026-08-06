@@ -75,41 +75,41 @@ func (c *WebSocketController) backgroundContext() (context.Context, context.Canc
 	return context.WithTimeout(context.Background(), timeout)
 }
 
-func (c *WebSocketController) HandleDocument(ctx echo.Context) error {
-	if c.production && ctx.Scheme() != "https" && ctx.Request().TLS == nil {
-		return writeWebSocketHTTPError(ctx, http.StatusForbidden, "WEBSOCKET_TLS_REQUIRED", "WSS接続が必要です")
+func (c *WebSocketController) HandleDocument(e echo.Context) error {
+	if c.production && e.Scheme() != "https" && e.Request().TLS == nil {
+		return writeWebSocketHTTPError(e, http.StatusForbidden, "WEBSOCKET_TLS_REQUIRED", "WSS接続が必要です")
 	}
 
-	documentID, err := parseDocumentIDParam(ctx)
+	documentID, err := parseDocumentIDParam(e)
 	if err != nil {
 		return err
 	}
 
-	userID, err := c.authenticate(ctx)
+	userID, err := c.authenticate(e)
 	if err != nil {
 		return err
 	}
 
-	reqCtx := ctx.Request().Context()
-	prepared, err := c.wsUseCase.PrepareConnection(reqCtx, usecase.PrepareWebSocketConnectionInput{
+	ctx := e.Request().Context()
+	prepared, err := c.wsUseCase.PrepareConnection(ctx, usecase.PrepareWebSocketConnectionInput{
 		UserID: userID, DocumentID: documentID,
 	})
 	if err != nil {
-		return handleWebSocketUseCaseError(ctx, err)
+		return handleWebSocketUseCaseError(e, err)
 	}
 
 	connectionID := uuid.New()
-	registered, err := c.wsUseCase.RegisterConnection(reqCtx, usecase.RegisterWebSocketConnectionInput{
+	registered, err := c.wsUseCase.RegisterConnection(ctx, usecase.RegisterWebSocketConnectionInput{
 		UserID: userID, DocumentID: documentID, ConnectionID: connectionID,
 	})
 	if err != nil {
-		return handleWebSocketUseCaseError(ctx, err)
+		return handleWebSocketUseCaseError(e, err)
 	}
 
 	upgrader := gorillaws.Upgrader{
 		CheckOrigin: c.checkOrigin,
 	}
-	conn, err := upgrader.Upgrade(ctx.Response(), ctx.Request(), nil)
+	conn, err := upgrader.Upgrade(e.Response(), e.Request(), nil)
 	if err != nil {
 		unregCtx, cancel := c.backgroundContext()
 		_, _ = c.wsUseCase.UnregisterConnection(unregCtx, usecase.UnregisterWebSocketConnectionInput{
@@ -136,44 +136,45 @@ func (c *WebSocketController) HandleDocument(ctx echo.Context) error {
 	return nil
 }
 
-func (c *WebSocketController) authenticate(ctx echo.Context) (uuid.UUID, error) {
-	rawToken := strings.TrimSpace(ctx.QueryParam("access_token"))
+func (c *WebSocketController) authenticate(e echo.Context) (uuid.UUID, error) {
+	rawToken := strings.TrimSpace(e.QueryParam("access_token"))
 	if rawToken == "" {
-		authorization := strings.TrimSpace(ctx.Request().Header.Get(echo.HeaderAuthorization))
+		authorization := strings.TrimSpace(e.Request().Header.Get(echo.HeaderAuthorization))
 		parts := strings.Fields(authorization)
 		if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
 			rawToken = parts[1]
 		}
 	}
 	if rawToken == "" {
-		return uuid.Nil, writeWebSocketHTTPError(ctx, http.StatusUnauthorized, "ACCESS_TOKEN_REQUIRED", "アクセストークンが必要です")
+		return uuid.Nil, writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_REQUIRED", "アクセストークンが必要です")
 	}
 
 	claims, err := c.tokens.ValidateAccessToken(rawToken, c.now().UTC())
 	if err != nil {
 		if errors.Is(err, jwt.ErrTokenExpired) {
-			return uuid.Nil, writeWebSocketHTTPError(ctx, http.StatusUnauthorized, "ACCESS_TOKEN_EXPIRED", "アクセストークンの有効期限が切れています")
+			return uuid.Nil, writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_EXPIRED", "アクセストークンの有効期限が切れています")
 		}
-		return uuid.Nil, writeWebSocketHTTPError(ctx, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+		return uuid.Nil, writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
 	}
 
-	isRevoked, err := c.revoked.IsRevoked(ctx.Request().Context(), claims.JTI)
+	ctx := e.Request().Context()
+	isRevoked, err := c.revoked.IsRevoked(ctx, claims.JTI)
 	if err != nil {
-		return uuid.Nil, writeWebSocketHTTPError(ctx, http.StatusServiceUnavailable, "AUTH_SERVICE_UNAVAILABLE", "認証サービスを利用できません")
+		return uuid.Nil, writeWebSocketHTTPError(e, http.StatusServiceUnavailable, "AUTH_SERVICE_UNAVAILABLE", "認証サービスを利用できません")
 	}
 	if isRevoked {
-		return uuid.Nil, writeWebSocketHTTPError(ctx, http.StatusUnauthorized, "ACCESS_TOKEN_REVOKED", "アクセストークンは失効しています")
+		return uuid.Nil, writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_REVOKED", "アクセストークンは失効しています")
 	}
 
-	user, found, err := c.users.FindByID(ctx.Request().Context(), claims.UserID)
+	user, found, err := c.users.FindByID(ctx, claims.UserID)
 	if err != nil {
-		return uuid.Nil, writeWebSocketHTTPError(ctx, http.StatusInternalServerError, "DATABASE_ERROR", "データベース処理に失敗しました")
+		return uuid.Nil, writeWebSocketHTTPError(e, http.StatusInternalServerError, "DATABASE_ERROR", "データベース処理に失敗しました")
 	}
 	if !found || !user.CanAuthenticate() {
-		return uuid.Nil, writeWebSocketHTTPError(ctx, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+		return uuid.Nil, writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
 	}
 	if user.AuthVersion != claims.AuthVersion {
-		return uuid.Nil, writeWebSocketHTTPError(ctx, http.StatusUnauthorized, "ACCESS_TOKEN_REVOKED", "アクセストークンは失効しています")
+		return uuid.Nil, writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_REVOKED", "アクセストークンは失効しています")
 	}
 	return claims.UserID, nil
 }
@@ -229,8 +230,8 @@ func (c *WebSocketController) handleClientMessage(client *appws.Client, raw []by
 			c.sendError(client, "INVALID_REQUEST", "編集内容が不正です")
 			return
 		}
-		editCtx, cancel := c.backgroundContext()
-		out, err := c.wsUseCase.ApplyDocumentEdit(editCtx, usecase.ApplyDocumentEditInput{
+		ctx, cancel := c.backgroundContext()
+		out, err := c.wsUseCase.ApplyDocumentEdit(ctx, usecase.ApplyDocumentEditInput{
 			UserID: client.UserID, DocumentID: client.DocumentID, Content: data.Content,
 		})
 		cancel()
@@ -254,8 +255,8 @@ func (c *WebSocketController) handleClientMessage(client *appws.Client, raw []by
 }
 
 func (c *WebSocketController) cleanupClient(client *appws.Client) {
-	unregCtx, cancel := c.backgroundContext()
-	out, err := c.wsUseCase.UnregisterConnection(unregCtx, usecase.UnregisterWebSocketConnectionInput{
+	ctx, cancel := c.backgroundContext()
+	out, err := c.wsUseCase.UnregisterConnection(ctx, usecase.UnregisterWebSocketConnectionInput{
 		UserID: client.UserID, DocumentID: client.DocumentID, ConnectionID: client.ConnectionID,
 	})
 	cancel()
@@ -322,22 +323,22 @@ func toEditorEventData(editors []usecase.DocumentEditorInfo) []appws.EditorEvent
 	return out
 }
 
-func writeWebSocketHTTPError(ctx echo.Context, status int, code, message string) error {
-	return ctx.JSON(status, dto.ErrorResponse{Error: dto.ErrorBody{Code: code, Message: message}})
+func writeWebSocketHTTPError(e echo.Context, status int, code, message string) error {
+	return e.JSON(status, dto.ErrorResponse{Error: dto.ErrorBody{Code: code, Message: message}})
 }
 
-func handleWebSocketUseCaseError(ctx echo.Context, err error) error {
+func handleWebSocketUseCaseError(e echo.Context, err error) error {
 	switch {
 	case errors.Is(err, usecase.ErrWebSocketConnectionLimitExceeded):
-		return writeWebSocketHTTPError(ctx, http.StatusConflict, "WEBSOCKET_CONNECTION_LIMIT_EXCEEDED", "WebSocket接続数の上限に達しています")
+		return writeWebSocketHTTPError(e, http.StatusConflict, "WEBSOCKET_CONNECTION_LIMIT_EXCEEDED", "WebSocket接続数の上限に達しています")
 	case errors.Is(err, usecase.ErrValidation):
-		return writeWebSocketHTTPError(ctx, http.StatusBadRequest, "VALIDATION_ERROR", "入力値が不正です")
+		return writeWebSocketHTTPError(e, http.StatusBadRequest, "VALIDATION_ERROR", "入力値が不正です")
 	case errors.Is(err, usecase.ErrDocumentNotFound):
-		return writeWebSocketHTTPError(ctx, http.StatusNotFound, "DOCUMENT_NOT_FOUND", "ドキュメントが見つかりません")
+		return writeWebSocketHTTPError(e, http.StatusNotFound, "DOCUMENT_NOT_FOUND", "ドキュメントが見つかりません")
 	case errors.Is(err, usecase.ErrDocumentDeleted):
-		return writeWebSocketHTTPError(ctx, http.StatusNotFound, "DOCUMENT_DELETED", "ドキュメントは削除されています")
+		return writeWebSocketHTTPError(e, http.StatusNotFound, "DOCUMENT_DELETED", "ドキュメントは削除されています")
 	default:
-		return handleWorkspaceUseCaseError(ctx, err)
+		return handleWorkspaceUseCaseError(e, err)
 	}
 }
 

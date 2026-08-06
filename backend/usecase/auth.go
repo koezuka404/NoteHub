@@ -53,7 +53,7 @@ type AuthUseCase struct {
 	users           repository.UserRepository
 	refreshTokens   repository.RefreshTokenRepository
 	auditLogs       repository.AuditLogRepository
-	auth            IAuthService // IPasswordService, IAccessTokenService, IRandomTokenService, ITokenHashService, IAccessTokenRevocationStore, ILoginFailureStore
+	auth            IAuthService //IPasswordService, IAccessTokenService, IRandomTokenService, ITokenHashService, IAccessTokenRevocationStore, ILoginFailureStore
 	transactions    repository.TransactionManager
 	refreshTokenTTL time.Duration
 	now             func() time.Time
@@ -123,7 +123,7 @@ func validateLoginInput(input LoginInput) bool {
 	return normalizeEmail(input.Email) != "" && input.Password != ""
 }
 
-// auth_login.go
+//auth_login.go
 
 const dummyPasswordHash = "$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro4llC/.og/at2.uheWG/igi"
 
@@ -388,7 +388,7 @@ func (uc *AuthUseCase) Refresh(ctx context.Context, input RefreshInput) (*Refres
 	return output, nil
 }
 
-// auth_logout.go
+//auth_logout.go
 
 type LogoutInput struct {
 	UserID         uuid.UUID
@@ -463,7 +463,7 @@ func (uc *AuthUseCase) Logout(ctx context.Context, input LogoutInput) (*LogoutOu
 	return &LogoutOutput{}, nil
 }
 
-// auth_me.go
+//auth_me.go
 
 type GetCurrentUserInput struct {
 	UserID uuid.UUID

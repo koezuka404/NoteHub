@@ -19,20 +19,21 @@ func NewVersionController(version usecase.IVersionUsecase) *VersionController {
 	return &VersionController{version: version}
 }
 
-func (c *VersionController) List(ctx echo.Context) error {
-	userID, err := authenticatedUserID(ctx)
+func (c *VersionController) List(e echo.Context) error {
+	userID, err := authenticatedUserID(e)
 	if err != nil {
 		return err
 	}
-	documentID, err := parseDocumentIDParam(ctx)
+	documentID, err := parseDocumentIDParam(e)
 	if err != nil {
 		return err
 	}
-	items, err := c.version.ListVersions(ctx.Request().Context(), usecase.ListVersionsInput{
+	ctx := e.Request().Context()
+	items, err := c.version.ListVersions(ctx, usecase.ListVersionsInput{
 		UserID: userID, DocumentID: documentID,
 	})
 	if err != nil {
-		return handleVersionUseCaseError(ctx, err)
+		return handleVersionUseCaseError(e, err)
 	}
 	resp := make([]dto.VersionListItemResponse, 0, len(items))
 	for _, item := range items {
@@ -41,76 +42,78 @@ func (c *VersionController) List(ctx echo.Context) error {
 			CreatedBy: item.CreatedBy.String(), CreatedAt: item.CreatedAt,
 		})
 	}
-	return ctx.JSON(http.StatusOK, dto.Response{Data: resp})
+	return e.JSON(http.StatusOK, dto.Response{Data: resp})
 }
 
-func (c *VersionController) Get(ctx echo.Context) error {
-	userID, err := authenticatedUserID(ctx)
+func (c *VersionController) Get(e echo.Context) error {
+	userID, err := authenticatedUserID(e)
 	if err != nil {
 		return err
 	}
-	documentID, err := parseDocumentIDParam(ctx)
+	documentID, err := parseDocumentIDParam(e)
 	if err != nil {
 		return err
 	}
-	versionID, err := parseVersionIDParam(ctx)
+	versionID, err := parseVersionIDParam(e)
 	if err != nil {
 		return err
 	}
-	out, err := c.version.GetVersion(ctx.Request().Context(), usecase.GetVersionInput{
+	ctx := e.Request().Context()
+	out, err := c.version.GetVersion(ctx, usecase.GetVersionInput{
 		UserID: userID, DocumentID: documentID, VersionID: versionID,
 	})
 	if err != nil {
-		return handleVersionUseCaseError(ctx, err)
+		return handleVersionUseCaseError(e, err)
 	}
-	return ctx.JSON(http.StatusOK, dto.Response{Data: dto.GetVersionResponse{
+	return e.JSON(http.StatusOK, dto.Response{Data: dto.GetVersionResponse{
 		ID: out.ID.String(), DocumentID: out.DocumentID.String(), Content: out.Content,
 		Type: out.Type, CreatedBy: out.CreatedBy.String(), CreatedAt: out.CreatedAt,
 	}})
 }
 
-func (c *VersionController) Restore(ctx echo.Context) error {
-	userID, err := authenticatedUserID(ctx)
+func (c *VersionController) Restore(e echo.Context) error {
+	userID, err := authenticatedUserID(e)
 	if err != nil {
 		return err
 	}
-	documentID, err := parseDocumentIDParam(ctx)
+	documentID, err := parseDocumentIDParam(e)
 	if err != nil {
 		return err
 	}
-	versionID, err := parseVersionIDParam(ctx)
+	versionID, err := parseVersionIDParam(e)
 	if err != nil {
 		return err
 	}
-	out, err := c.version.RestoreVersion(ctx.Request().Context(), usecase.RestoreVersionInput{
+	ctx := e.Request().Context()
+	out, err := c.version.RestoreVersion(ctx, usecase.RestoreVersionInput{
 		UserID: userID, DocumentID: documentID, VersionID: versionID,
 	})
 	if err != nil {
-		return handleVersionUseCaseError(ctx, err)
+		return handleVersionUseCaseError(e, err)
 	}
-	return ctx.JSON(http.StatusOK, dto.Response{Data: dto.RestoreVersionResponse{
+	return e.JSON(http.StatusOK, dto.Response{Data: dto.RestoreVersionResponse{
 		DocumentID: out.DocumentID.String(),
 		VersionID:  out.VersionID.String(),
 		RestoredAt: out.RestoredAt,
 	}})
 }
 
-func parseVersionIDParam(ctx echo.Context) (uuid.UUID, error) {
-	raw := ctx.Param("versionId")
+func parseVersionIDParam(e echo.Context) (uuid.UUID, error) {
+	raw := e.Param("versionId")
 	id, err := uuid.Parse(raw)
 	if err != nil {
-		return uuid.Nil, writeWorkspaceError(ctx, http.StatusBadRequest, "INVALID_REQUEST", "バージョンIDが不正です")
+		return uuid.Nil, writeWorkspaceError(e, http.StatusBadRequest, "INVALID_REQUEST", "バージョンIDが不正です")
 	}
 	return id, nil
 }
 
-func handleVersionUseCaseError(ctx echo.Context, err error) error {
+func handleVersionUseCaseError(e echo.Context, err error) error {
 	switch {
 	case errors.Is(err, usecase.ErrVersionNotFound):
-		return writeWorkspaceError(ctx, http.StatusNotFound, "VERSION_NOT_FOUND", "編集履歴が見つかりません")
+		return writeWorkspaceError(e, http.StatusNotFound, "VERSION_NOT_FOUND", "編集履歴が見つかりません")
 	case errors.Is(err, entity.ErrDocumentConflict):
-		return writeWorkspaceError(ctx, http.StatusConflict, "DOCUMENT_CONFLICT", "ドキュメントが更新されています")
+		return writeWorkspaceError(e, http.StatusConflict, "DOCUMENT_CONFLICT", "ドキュメントが更新されています")
 	default:
-		return handleDocumentUseCaseError(ctx, err)
+		return handleDocumentUseCaseError(e, err)
 	}
 }

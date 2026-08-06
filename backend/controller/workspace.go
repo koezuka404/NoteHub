@@ -19,24 +19,25 @@ func NewWorkspaceController(workspace usecase.IWorkspaceUsecase) *WorkspaceContr
 	return &WorkspaceController{workspace: workspace}
 }
 
-func (c *WorkspaceController) Create(ctx echo.Context) error {
-	userID, err := authenticatedUserID(ctx)
+func (c *WorkspaceController) Create(e echo.Context) error {
+	userID, err := authenticatedUserID(e)
 	if err != nil {
 		return err
 	}
 	var req dto.CreateWorkspaceRequest
-	if err := ctx.Bind(&req); err != nil {
-		return writeWorkspaceError(ctx, http.StatusBadRequest, "INVALID_REQUEST", "リクエスト形式が不正です")
+	if err := e.Bind(&req); err != nil {
+		return writeWorkspaceError(e, http.StatusBadRequest, "INVALID_REQUEST", "リクエスト形式が不正です")
 	}
-	out, err := c.workspace.CreateWorkspace(ctx.Request().Context(), usecase.CreateWorkspaceInput{
+	ctx := e.Request().Context()
+	out, err := c.workspace.CreateWorkspace(ctx, usecase.CreateWorkspaceInput{
 		UserID:    userID,
 		Name:      req.Name,
-		IPAddress: ctx.RealIP(),
+		IPAddress: e.RealIP(),
 	})
 	if err != nil {
-		return handleWorkspaceUseCaseError(ctx, err)
+		return handleWorkspaceUseCaseError(e, err)
 	}
-	return ctx.JSON(http.StatusCreated, dto.Response{Data: dto.CreateWorkspaceResponse{
+	return e.JSON(http.StatusCreated, dto.Response{Data: dto.CreateWorkspaceResponse{
 		ID:        out.ID.String(),
 		Name:      out.Name,
 		HostID:    out.HostID.String(),
@@ -44,14 +45,15 @@ func (c *WorkspaceController) Create(ctx echo.Context) error {
 	}})
 }
 
-func (c *WorkspaceController) List(ctx echo.Context) error {
-	userID, err := authenticatedUserID(ctx)
+func (c *WorkspaceController) List(e echo.Context) error {
+	userID, err := authenticatedUserID(e)
 	if err != nil {
 		return err
 	}
-	items, err := c.workspace.ListWorkspaces(ctx.Request().Context(), usecase.ListWorkspacesInput{UserID: userID})
+	ctx := e.Request().Context()
+	items, err := c.workspace.ListWorkspaces(ctx, usecase.ListWorkspacesInput{UserID: userID})
 	if err != nil {
-		return handleWorkspaceUseCaseError(ctx, err)
+		return handleWorkspaceUseCaseError(e, err)
 	}
 	resp := make([]dto.WorkspaceListItemResponse, 0, len(items))
 	for _, item := range items {
@@ -66,26 +68,27 @@ func (c *WorkspaceController) List(ctx echo.Context) error {
 			UpdatedAt:         item.UpdatedAt,
 		})
 	}
-	return ctx.JSON(http.StatusOK, dto.Response{Data: resp})
+	return e.JSON(http.StatusOK, dto.Response{Data: resp})
 }
 
-func (c *WorkspaceController) Get(ctx echo.Context) error {
-	userID, err := authenticatedUserID(ctx)
+func (c *WorkspaceController) Get(e echo.Context) error {
+	userID, err := authenticatedUserID(e)
 	if err != nil {
 		return err
 	}
-	workspaceID, err := parseWorkspaceIDParam(ctx)
+	workspaceID, err := parseWorkspaceIDParam(e)
 	if err != nil {
 		return err
 	}
-	out, err := c.workspace.GetWorkspace(ctx.Request().Context(), usecase.GetWorkspaceInput{
+	ctx := e.Request().Context()
+	out, err := c.workspace.GetWorkspace(ctx, usecase.GetWorkspaceInput{
 		UserID:      userID,
 		WorkspaceID: workspaceID,
 	})
 	if err != nil {
-		return handleWorkspaceUseCaseError(ctx, err)
+		return handleWorkspaceUseCaseError(e, err)
 	}
-	return ctx.JSON(http.StatusOK, dto.Response{Data: dto.GetWorkspaceResponse{
+	return e.JSON(http.StatusOK, dto.Response{Data: dto.GetWorkspaceResponse{
 		ID:   out.ID.String(),
 		Name: out.Name,
 		Host: dto.WorkspaceHostResponse{
@@ -99,109 +102,111 @@ func (c *WorkspaceController) Get(ctx echo.Context) error {
 	}})
 }
 
-func (c *WorkspaceController) Update(ctx echo.Context) error {
-	userID, err := authenticatedUserID(ctx)
+func (c *WorkspaceController) Update(e echo.Context) error {
+	userID, err := authenticatedUserID(e)
 	if err != nil {
 		return err
 	}
-	workspaceID, err := parseWorkspaceIDParam(ctx)
+	workspaceID, err := parseWorkspaceIDParam(e)
 	if err != nil {
 		return err
 	}
 	var req dto.UpdateWorkspaceRequest
-	if err := ctx.Bind(&req); err != nil {
-		return writeWorkspaceError(ctx, http.StatusBadRequest, "INVALID_REQUEST", "リクエスト形式が不正です")
+	if err := e.Bind(&req); err != nil {
+		return writeWorkspaceError(e, http.StatusBadRequest, "INVALID_REQUEST", "リクエスト形式が不正です")
 	}
-	out, err := c.workspace.UpdateWorkspace(ctx.Request().Context(), usecase.UpdateWorkspaceInput{
+	ctx := e.Request().Context()
+	out, err := c.workspace.UpdateWorkspace(ctx, usecase.UpdateWorkspaceInput{
 		UserID:      userID,
 		WorkspaceID: workspaceID,
 		Name:        req.Name,
-		IPAddress:   ctx.RealIP(),
+		IPAddress:   e.RealIP(),
 	})
 	if err != nil {
-		return handleWorkspaceUseCaseError(ctx, err)
+		return handleWorkspaceUseCaseError(e, err)
 	}
-	return ctx.JSON(http.StatusOK, dto.Response{Data: dto.UpdateWorkspaceResponse{
+	return e.JSON(http.StatusOK, dto.Response{Data: dto.UpdateWorkspaceResponse{
 		ID:        out.ID.String(),
 		Name:      out.Name,
 		UpdatedAt: out.UpdatedAt,
 	}})
 }
 
-func (c *WorkspaceController) Delete(ctx echo.Context) error {
-	userID, err := authenticatedUserID(ctx)
+func (c *WorkspaceController) Delete(e echo.Context) error {
+	userID, err := authenticatedUserID(e)
 	if err != nil {
 		return err
 	}
-	workspaceID, err := parseWorkspaceIDParam(ctx)
+	workspaceID, err := parseWorkspaceIDParam(e)
 	if err != nil {
 		return err
 	}
 	var req dto.DeleteWorkspaceRequest
-	if err := ctx.Bind(&req); err != nil {
-		return writeWorkspaceError(ctx, http.StatusBadRequest, "INVALID_REQUEST", "リクエスト形式が不正です")
+	if err := e.Bind(&req); err != nil {
+		return writeWorkspaceError(e, http.StatusBadRequest, "INVALID_REQUEST", "リクエスト形式が不正です")
 	}
-	out, err := c.workspace.DeleteWorkspace(ctx.Request().Context(), usecase.DeleteWorkspaceInput{
+	ctx := e.Request().Context()
+	out, err := c.workspace.DeleteWorkspace(ctx, usecase.DeleteWorkspaceInput{
 		UserID:      userID,
 		WorkspaceID: workspaceID,
 		Reason:      req.Reason,
-		IPAddress:   ctx.RealIP(),
+		IPAddress:   e.RealIP(),
 	})
 	if err != nil {
-		return handleWorkspaceUseCaseError(ctx, err)
+		return handleWorkspaceUseCaseError(e, err)
 	}
-	return ctx.JSON(http.StatusOK, dto.Response{Data: dto.DeleteWorkspaceResponse{
+	return e.JSON(http.StatusOK, dto.Response{Data: dto.DeleteWorkspaceResponse{
 		WorkspaceID: out.WorkspaceID.String(),
 		DeletedAt:   out.DeletedAt,
 	}})
 }
 
-func authenticatedUserID(ctx echo.Context) (uuid.UUID, error) {
-	userID, ok := ctx.Get(appmiddleware.ContextUserID).(uuid.UUID)
+func authenticatedUserID(e echo.Context) (uuid.UUID, error) {
+	userID, ok := e.Get(appmiddleware.ContextUserID).(uuid.UUID)
 	if !ok || userID == uuid.Nil {
-		return uuid.Nil, writeWorkspaceError(ctx, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+		return uuid.Nil, writeWorkspaceError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
 	}
 	return userID, nil
 }
 
-func parseWorkspaceIDParam(ctx echo.Context) (uuid.UUID, error) {
-	raw := ctx.Param("workspaceId")
+func parseWorkspaceIDParam(e echo.Context) (uuid.UUID, error) {
+	raw := e.Param("workspaceId")
 	id, err := uuid.Parse(raw)
 	if err != nil {
-		return uuid.Nil, writeWorkspaceError(ctx, http.StatusBadRequest, "INVALID_REQUEST", "ワークスペースIDが不正です")
+		return uuid.Nil, writeWorkspaceError(e, http.StatusBadRequest, "INVALID_REQUEST", "ワークスペースIDが不正です")
 	}
 	return id, nil
 }
 
-func handleWorkspaceUseCaseError(ctx echo.Context, err error) error {
+func handleWorkspaceUseCaseError(e echo.Context, err error) error {
 	switch {
 	case errors.Is(err, usecase.ErrValidation):
-		return writeWorkspaceError(ctx, http.StatusBadRequest, "VALIDATION_ERROR", "入力値が不正です")
+		return writeWorkspaceError(e, http.StatusBadRequest, "VALIDATION_ERROR", "入力値が不正です")
 	case errors.Is(err, usecase.ErrAccountUnavailable):
-		return writeWorkspaceError(ctx, http.StatusForbidden, "ACCOUNT_UNAVAILABLE", "この操作を実行できません")
+		return writeWorkspaceError(e, http.StatusForbidden, "ACCOUNT_UNAVAILABLE", "この操作を実行できません")
 	case errors.Is(err, usecase.ErrAccountSuspended):
-		return writeWorkspaceError(ctx, http.StatusForbidden, "ACCOUNT_UNAVAILABLE", "この操作を実行できません")
+		return writeWorkspaceError(e, http.StatusForbidden, "ACCOUNT_UNAVAILABLE", "この操作を実行できません")
 	case errors.Is(err, usecase.ErrAccountDeleted):
-		return writeWorkspaceError(ctx, http.StatusForbidden, "ACCOUNT_UNAVAILABLE", "この操作を実行できません")
+		return writeWorkspaceError(e, http.StatusForbidden, "ACCOUNT_UNAVAILABLE", "この操作を実行できません")
 	case errors.Is(err, usecase.ErrWorkspaceNotFound):
-		return writeWorkspaceError(ctx, http.StatusNotFound, "WORKSPACE_NOT_FOUND", "ワークスペースが見つかりません")
+		return writeWorkspaceError(e, http.StatusNotFound, "WORKSPACE_NOT_FOUND", "ワークスペースが見つかりません")
 	case errors.Is(err, usecase.ErrWorkspaceAlreadyDeleted):
-		return writeWorkspaceError(ctx, http.StatusConflict, "WORKSPACE_ALREADY_DELETED", "ワークスペースは既に削除されています")
+		return writeWorkspaceError(e, http.StatusConflict, "WORKSPACE_ALREADY_DELETED", "ワークスペースは既に削除されています")
 	case errors.Is(err, usecase.ErrWorkspaceAccessDenied):
-		return writeWorkspaceError(ctx, http.StatusForbidden, "WORKSPACE_ACCESS_DENIED", "このワークスペースへアクセスできません")
+		return writeWorkspaceError(e, http.StatusForbidden, "WORKSPACE_ACCESS_DENIED", "このワークスペースへアクセスできません")
 	case errors.Is(err, usecase.ErrWorkspacePermissionDenied):
-		return writeWorkspaceError(ctx, http.StatusForbidden, "WORKSPACE_PERMISSION_DENIED", "この操作を実行する権限がありません")
+		return writeWorkspaceError(e, http.StatusForbidden, "WORKSPACE_PERMISSION_DENIED", "この操作を実行する権限がありません")
 	case errors.Is(err, usecase.ErrHostPermissionRequired):
-		return writeWorkspaceError(ctx, http.StatusForbidden, "HOST_PERMISSION_REQUIRED", "ホスト権限が必要です")
+		return writeWorkspaceError(e, http.StatusForbidden, "HOST_PERMISSION_REQUIRED", "ホスト権限が必要です")
 	case errors.Is(err, usecase.ErrWorkspaceHostSuspended):
-		return writeWorkspaceError(ctx, http.StatusLocked, "WORKSPACE_HOST_SUSPENDED", "このワークスペースは現在利用できません")
+		return writeWorkspaceError(e, http.StatusLocked, "WORKSPACE_HOST_SUSPENDED", "このワークスペースは現在利用できません")
 	case errors.Is(err, usecase.ErrWorkspaceHostDeleted):
-		return writeWorkspaceError(ctx, http.StatusLocked, "WORKSPACE_HOST_DELETED", "このワークスペースは現在利用できません")
+		return writeWorkspaceError(e, http.StatusLocked, "WORKSPACE_HOST_DELETED", "このワークスペースは現在利用できません")
 	default:
-		return writeWorkspaceError(ctx, http.StatusInternalServerError, "INTERNAL_ERROR", "内部エラーが発生しました")
+		return writeWorkspaceError(e, http.StatusInternalServerError, "INTERNAL_ERROR", "内部エラーが発生しました")
 	}
 }
 
-func writeWorkspaceError(ctx echo.Context, status int, code, message string) error {
-	return ctx.JSON(status, dto.ErrorResponse{Error: dto.ErrorBody{Code: code, Message: message}})
+func writeWorkspaceError(e echo.Context, status int, code, message string) error {
+	return e.JSON(status, dto.ErrorResponse{Error: dto.ErrorBody{Code: code, Message: message}})
 }
