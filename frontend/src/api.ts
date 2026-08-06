@@ -122,6 +122,21 @@ export type DocumentListItem = {
   updatedAt: string;
 };
 
+export type WorkspaceDetail = {
+  id: string;
+  name: string;
+  role: string;
+};
+
+export type DocumentDetail = {
+  id: string;
+  workspaceId: string;
+  title: string;
+  content: string;
+  updatedBy: string;
+  updatedAt: string;
+};
+
 export function listWorkspaces(accessToken: string) {
   return api<WorkspaceListItem[]>('/api/workspaces', {}, accessToken);
 }
@@ -135,6 +150,14 @@ export function createWorkspace(accessToken: string, name: string) {
     },
     accessToken,
   );
+}
+
+export function getWorkspace(accessToken: string, workspaceId: string) {
+  return api<WorkspaceDetail>(`/api/workspaces/${workspaceId}`, {}, accessToken);
+}
+
+export function getDocument(accessToken: string, documentId: string) {
+  return api<DocumentDetail>(`/api/documents/${documentId}`, {}, accessToken);
 }
 
 export function listDocuments(accessToken: string, workspaceId: string) {
