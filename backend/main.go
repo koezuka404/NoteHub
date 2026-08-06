@@ -12,6 +12,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/koezuka404/notehub/authservice"
 	"github.com/koezuka404/notehub/batch"
 	"github.com/koezuka404/notehub/config"
 	"github.com/koezuka404/notehub/controller"
@@ -74,17 +75,21 @@ func main() {
 	loginFailures := appredis.NewLoginFailureStore(redisClient, cfg.LoginMaxFailures, cfg.LoginFailureWindow, cfg.LoginLockDuration)
 	tokenBuckets := appredis.NewTokenBucketStore(redisClient)
 	transactionManager := usecase.NewTransactionManager(database)
+
+	authService := authservice.NewAuthService(
+		infrcrypto.NewPasswordService(cfg.BcryptCost), //IPasswordService
+		jwtService,                         //IAccessTokenService
+		infrcrypto.NewRandomTokenService(), //IRandomTokenService
+		infrcrypto.NewTokenHashService(),   //ITokenHashService
+		accessTokenRevocations,             //IAccessTokenRevocationStore
+		loginFailures,                      //ILoginFailureStore
+	)
 	authUseCase := usecase.NewAuthUseCase(
 		userRepository,
 		refreshTokenRepository,
 		auditLogRepository,
-		accessTokenRevocations,
-		loginFailures,
+		authService, //IAuthService
 		transactionManager,
-		infrcrypto.NewPasswordService(cfg.BcryptCost),
-		jwtService,
-		infrcrypto.NewRandomTokenService(),
-		infrcrypto.NewTokenHashService(),
 		cfg.RefreshTokenTTL,
 	)
 	authController := controller.NewAuthController(authUseCase, controller.AuthCookieConfig{

@@ -9,9 +9,11 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
 	"github.com/google/uuid"
 	"github.com/koezuka404/notehub/entity"
 )
+
 const (
 	maxNameLength     = 50
 	minPasswordLength = 8
@@ -37,32 +39,25 @@ type IAuditLogRepository interface {
 	Create(ctx context.Context, log *entity.AuditLog) error
 }
 
-type IAccessTokenRevocationStore interface {
-	Revoke(ctx context.Context, jti uuid.UUID, ttl time.Duration) error
-	IsRevoked(ctx context.Context, jti uuid.UUID) (bool, error)
-}
-
-type ILoginFailureStore interface {
-	IsLocked(ctx context.Context, email string) (locked bool, retryAfter time.Duration, err error)
-	RecordFailure(ctx context.Context, email string) (locked bool, retryAfter time.Duration, err error)
-	Reset(ctx context.Context, email string) error
-}
-
-type IPasswordService interface {
-	Hash(password string) (string, error)
-	Compare(passwordHash, password string) error
-}
-
-type IAccessTokenService interface {
+type IAuthService interface {
+	//IPasswordService
+	HashPassword(password string) (string, error)
+	ComparePassword(passwordHash, password string) error
+	//IAccessTokenService
 	GenerateAccessToken(userID uuid.UUID, authVersion uint, now time.Time) (token string, expiresAt time.Time, err error)
-}
-
-type IRandomTokenService interface {
+	//IRandomTokenService
 	GenerateRefreshToken() (string, error)
 	GenerateCSRFToken() (string, error)
+	//ITokenHashService
+	HashToken(token string) string
+	//IAccessTokenRevocationStore
+	RevokeAccessToken(ctx context.Context, jti uuid.UUID, ttl time.Duration) error
+	IsAccessTokenRevoked(ctx context.Context, jti uuid.UUID) (bool, error)
+	//ILoginFailureStore
+	IsLoginLocked(ctx context.Context, email string) (locked bool, retryAfter time.Duration, err error)
+	RecordLoginFailure(ctx context.Context, email string) (locked bool, retryAfter time.Duration, err error)
+	ResetLoginFailures(ctx context.Context, email string) error
 }
-
-type ITokenHashService interface{ Hash(token string) string }
 
 type IAuthUsecase interface {
 	Register(ctx context.Context, input RegisterInput) (*RegisterOutput, error)
@@ -76,13 +71,8 @@ type AuthUseCase struct {
 	users           IUserRepository
 	refreshTokens   IRefreshTokenRepository
 	auditLogs       IAuditLogRepository
-	revokedAccess   IAccessTokenRevocationStore
-	loginFailures   ILoginFailureStore
+	auth            IAuthService // IPasswordService, IAccessTokenService, IRandomTokenService, ITokenHashService, IAccessTokenRevocationStore, ILoginFailureStore
 	transactions    ITransactionManager
-	passwords       IPasswordService
-	accessTokens    IAccessTokenService
-	randomTokens    IRandomTokenService
-	tokenHashes     ITokenHashService
 	refreshTokenTTL time.Duration
 	now             func() time.Time
 }
@@ -91,20 +81,14 @@ func NewAuthUseCase(
 	users IUserRepository,
 	refreshTokens IRefreshTokenRepository,
 	auditLogs IAuditLogRepository,
-	revokedAccess IAccessTokenRevocationStore,
-	loginFailures ILoginFailureStore,
+	auth IAuthService,
 	transactions ITransactionManager,
-	passwords IPasswordService,
-	accessTokens IAccessTokenService,
-	randomTokens IRandomTokenService,
-	tokenHashes ITokenHashService,
 	refreshTokenTTL time.Duration,
 ) *AuthUseCase {
 	return &AuthUseCase{
 		users: users, refreshTokens: refreshTokens, auditLogs: auditLogs,
-		revokedAccess: revokedAccess, loginFailures: loginFailures, transactions: transactions,
-		passwords: passwords, accessTokens: accessTokens, randomTokens: randomTokens,
-		tokenHashes: tokenHashes, refreshTokenTTL: refreshTokenTTL, now: time.Now,
+		auth: auth, transactions: transactions,
+		refreshTokenTTL: refreshTokenTTL, now: time.Now,
 	}
 }
 
@@ -186,14 +170,12 @@ func (uc *AuthUseCase) Login(ctx context.Context, input LoginInput) (*LoginOutpu
 	}
 
 	email := normalizeEmail(input.Email)
-	if uc.loginFailures != nil {
-		locked, _, err := uc.loginFailures.IsLocked(ctx, email)
-		if err != nil {
-			return nil, fmt.Errorf("%w: check login lock: %v", ErrAuthServiceUnavailable, err)
-		}
-		if locked {
-			return nil, ErrLoginTemporarilyLocked
-		}
+	locked, _, err := uc.auth.IsLoginLocked(ctx, email)
+	if err != nil {
+		return nil, fmt.Errorf("%w: check login lock: %v", ErrAuthServiceUnavailable, err)
+	}
+	if locked {
+		return nil, ErrLoginTemporarilyLocked
 	}
 
 	user, found, err := uc.users.FindByEmail(ctx, email)
@@ -201,31 +183,29 @@ func (uc *AuthUseCase) Login(ctx context.Context, input LoginInput) (*LoginOutpu
 		return nil, fmt.Errorf("find user by email: %w", err)
 	}
 	if !found {
-		_ = uc.passwords.Compare(dummyPasswordHash, input.Password)
+		_ = uc.auth.ComparePassword(dummyPasswordHash, input.Password)
 		return nil, uc.recordLoginFailure(ctx, email)
 	}
 	if !user.CanAuthenticate() {
 		return nil, uc.recordLoginFailure(ctx, email)
 	}
-	if err := uc.passwords.Compare(user.PasswordHash, input.Password); err != nil {
+	if err := uc.auth.ComparePassword(user.PasswordHash, input.Password); err != nil {
 		return nil, uc.recordLoginFailure(ctx, email)
 	}
-	if uc.loginFailures != nil {
-		if err := uc.loginFailures.Reset(ctx, email); err != nil {
-			return nil, fmt.Errorf("%w: reset login failures: %v", ErrAuthServiceUnavailable, err)
-		}
+	if err := uc.auth.ResetLoginFailures(ctx, email); err != nil {
+		return nil, fmt.Errorf("%w: reset login failures: %v", ErrAuthServiceUnavailable, err)
 	}
 
 	now := uc.now()
-	accessToken, expiresAt, err := uc.accessTokens.GenerateAccessToken(user.ID, user.AuthVersion, now)
+	accessToken, expiresAt, err := uc.auth.GenerateAccessToken(user.ID, user.AuthVersion, now)
 	if err != nil {
 		return nil, fmt.Errorf("generate access token: %w", err)
 	}
-	rawRefresh, err := uc.randomTokens.GenerateRefreshToken()
+	rawRefresh, err := uc.auth.GenerateRefreshToken()
 	if err != nil {
 		return nil, fmt.Errorf("generate refresh token: %w", err)
 	}
-	refresh, err := entity.NewRefreshToken(user.ID, uc.tokenHashes.Hash(rawRefresh), uuid.New(), now.Add(uc.refreshTokenTTL), now)
+	refresh, err := entity.NewRefreshToken(user.ID, uc.auth.HashToken(rawRefresh), uuid.New(), now.Add(uc.refreshTokenTTL), now)
 	if err != nil {
 		return nil, fmt.Errorf("create refresh token entity: %w", err)
 	}
@@ -234,7 +214,7 @@ func (uc *AuthUseCase) Login(ctx context.Context, input LoginInput) (*LoginOutpu
 	if err := uc.refreshTokens.Create(ctx, &refresh); err != nil {
 		return nil, fmt.Errorf("save refresh token: %w", err)
 	}
-	csrfToken, err := uc.randomTokens.GenerateCSRFToken()
+	csrfToken, err := uc.auth.GenerateCSRFToken()
 	if err != nil {
 		return nil, fmt.Errorf("generate csrf token: %w", err)
 	}
@@ -246,10 +226,7 @@ func (uc *AuthUseCase) Login(ctx context.Context, input LoginInput) (*LoginOutpu
 }
 
 func (uc *AuthUseCase) recordLoginFailure(ctx context.Context, email string) error {
-	if uc.loginFailures == nil {
-		return ErrInvalidCredentials
-	}
-	locked, _, err := uc.loginFailures.RecordFailure(ctx, email)
+	locked, _, err := uc.auth.RecordLoginFailure(ctx, email)
 	if err != nil {
 		return fmt.Errorf("%w: record login failure: %v", ErrAuthServiceUnavailable, err)
 	}
@@ -290,7 +267,7 @@ func (uc *AuthUseCase) Register(ctx context.Context, input RegisterInput) (*Regi
 		return nil, ErrEmailAlreadyExists
 	}
 
-	passwordHash, err := uc.passwords.Hash(input.Password)
+	passwordHash, err := uc.auth.HashPassword(input.Password)
 	if err != nil {
 		return nil, fmt.Errorf("hash password: %w", err)
 	}
@@ -349,7 +326,7 @@ func (uc *AuthUseCase) Refresh(ctx context.Context, input RefreshInput) (*Refres
 	var reused bool
 
 	err := uc.transactions.WithinTransaction(ctx, func(txCtx context.Context) error {
-		current, found, err := uc.refreshTokens.FindByHashForUpdate(txCtx, uc.tokenHashes.Hash(input.RefreshToken))
+		current, found, err := uc.refreshTokens.FindByHashForUpdate(txCtx, uc.auth.HashToken(input.RefreshToken))
 		if err != nil {
 			return fmt.Errorf("find refresh token: %w", err)
 		}
@@ -387,11 +364,11 @@ func (uc *AuthUseCase) Refresh(ctx context.Context, input RefreshInput) (*Refres
 			return ErrRefreshTokenRevoked
 		}
 
-		rawNext, err := uc.randomTokens.GenerateRefreshToken()
+		rawNext, err := uc.auth.GenerateRefreshToken()
 		if err != nil {
 			return fmt.Errorf("generate next refresh token: %w", err)
 		}
-		next, err := entity.NewRefreshToken(user.ID, uc.tokenHashes.Hash(rawNext), current.FamilyID, now.Add(uc.refreshTokenTTL), now)
+		next, err := entity.NewRefreshToken(user.ID, uc.auth.HashToken(rawNext), current.FamilyID, now.Add(uc.refreshTokenTTL), now)
 		if err != nil {
 			return fmt.Errorf("create next refresh token: %w", err)
 		}
@@ -406,11 +383,11 @@ func (uc *AuthUseCase) Refresh(ctx context.Context, input RefreshInput) (*Refres
 		if err := uc.refreshTokens.Update(txCtx, current); err != nil {
 			return fmt.Errorf("rotate current refresh token: %w", err)
 		}
-		access, expiresAt, err := uc.accessTokens.GenerateAccessToken(user.ID, user.AuthVersion, now)
+		access, expiresAt, err := uc.auth.GenerateAccessToken(user.ID, user.AuthVersion, now)
 		if err != nil {
 			return fmt.Errorf("generate access token: %w", err)
 		}
-		csrfToken, err := uc.randomTokens.GenerateCSRFToken()
+		csrfToken, err := uc.auth.GenerateCSRFToken()
 		if err != nil {
 			return fmt.Errorf("generate csrf token: %w", err)
 		}
@@ -456,7 +433,7 @@ func (uc *AuthUseCase) Logout(ctx context.Context, input LogoutInput) (*LogoutOu
 
 	err := uc.transactions.WithinTransaction(ctx, func(txCtx context.Context) error {
 		if rawRefreshToken != "" {
-			token, found, err := uc.refreshTokens.FindByHashForUpdate(txCtx, uc.tokenHashes.Hash(rawRefreshToken))
+			token, found, err := uc.refreshTokens.FindByHashForUpdate(txCtx, uc.auth.HashToken(rawRefreshToken))
 			if err != nil {
 				return fmt.Errorf("find refresh token for logout: %w", err)
 			}
@@ -497,7 +474,7 @@ func (uc *AuthUseCase) Logout(ctx context.Context, input LogoutInput) (*LogoutOu
 
 	ttl := input.AccessTokenExp.Sub(now)
 	if ttl > 0 {
-		if err := uc.revokedAccess.Revoke(ctx, input.AccessTokenJTI, ttl); err != nil {
+		if err := uc.auth.RevokeAccessToken(ctx, input.AccessTokenJTI, ttl); err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrAuthServiceUnavailable, err)
 		}
 	}
