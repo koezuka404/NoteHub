@@ -185,7 +185,6 @@ func handleAuthUseCaseError(e echo.Context, err error) error {
 	}
 }
 
-// writeAuthError　認証APIのエラーレスポンスを返す eはHTTPレスポンス出力時に使用
 func writeAuthError(e echo.Context, status int, code, message string) error {
-	return e.JSON(status, dto.ErrorResponse{Error: dto.ErrorBody{Code: code, Message: message}})
+	return appmiddleware.WriteError(e, status, code, message)
 }

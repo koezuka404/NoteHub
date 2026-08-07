@@ -13,6 +13,7 @@ type IVersionUsecase interface {
 	ListVersions(ctx context.Context, input ListVersionsInput) ([]VersionListItem, error)
 	GetVersion(ctx context.Context, input GetVersionInput) (*GetVersionOutput, error)
 	CreateVersion(ctx context.Context, input CreateVersionInput) error
+	SaveManualVersion(ctx context.Context, input SaveManualVersionInput) (*SaveManualVersionOutput, error)
 	RestoreVersion(ctx context.Context, input RestoreVersionInput) (*RestoreVersionOutput, error)
 }
 
@@ -105,6 +106,86 @@ func (uc *VersionUseCase) CreateVersion(ctx context.Context, input CreateVersion
 		return fmt.Errorf("save document version: %w", err)
 	}
 	return nil
+}
+
+type SaveManualVersionInput struct {
+	UserID     uuid.UUID
+	DocumentID uuid.UUID
+}
+
+type SaveManualVersionOutput struct {
+	ID        uuid.UUID
+	CreatedAt string
+}
+
+func (uc *VersionUseCase) SaveManualVersion(ctx context.Context, input SaveManualVersionInput) (*SaveManualVersionOutput, error) {
+	doc, err := uc.loadDoc(ctx, input.DocumentID)
+	if err != nil {
+		return nil, err
+	}
+	if err := uc.authorizeDoc(ctx, input.UserID, doc); err != nil {
+		return nil, err
+	}
+
+	content, err := uc.currentContent(ctx, doc)
+	if err != nil {
+		return nil, fmt.Errorf("load current document content: %w", err)
+	}
+	if err := validDocumentContent(content); err != nil {
+		return nil, err
+	}
+
+	now := uc.currentTime()
+	var output *SaveManualVersionOutput
+
+	if err := uc.transactions.WithinTransaction(ctx, func(txCtx context.Context) error {
+		locked, found, err := uc.docs.FindByIDForUpdate(txCtx, input.DocumentID)
+		if err != nil {
+			return fmt.Errorf("find document for manual save: %w", err)
+		}
+		if !found {
+			return ErrDocumentNotFound
+		}
+		if locked.IsDeleted() {
+			return ErrDocumentDeleted
+		}
+
+		if locked.Content != content {
+			if err := locked.ReplaceContent(content, input.UserID, locked.Revision, now); err != nil {
+				return err
+			}
+			if err := uc.docs.Update(txCtx, locked); err != nil {
+				return fmt.Errorf("update document content: %w", err)
+			}
+		}
+
+		version, err := entity.NewDocumentVersion(*locked, content, entity.DocumentVersionManualSave, input.UserID, nil, now)
+		if err != nil {
+			return fmt.Errorf("create manual save version entity: %w", err)
+		}
+		if err := uc.versions.Create(txCtx, &version); err != nil {
+			return fmt.Errorf("save manual save version: %w", err)
+		}
+
+		output = &SaveManualVersionOutput{
+			ID:        version.ID,
+			CreatedAt: version.CreatedAt.Format(timeFormat),
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	if uc.cache != nil {
+		if err := uc.cache.SetContent(ctx, input.DocumentID, content, input.UserID, now); err != nil {
+			return nil, fmt.Errorf("update document cache after manual save: %w", err)
+		}
+		if err := uc.cache.MarkClean(ctx, input.DocumentID); err != nil {
+			return nil, fmt.Errorf("mark document clean after manual save: %w", err)
+		}
+	}
+
+	return output, nil
 }
 
 // version_get.go

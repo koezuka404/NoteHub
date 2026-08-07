@@ -71,6 +71,27 @@ func (c *VersionController) Get(e echo.Context) error {
 	}})
 }
 
+func (c *VersionController) Save(e echo.Context) error {
+	userID, err := authenticatedUserID(e)
+	if err != nil {
+		return err
+	}
+	documentID, err := parseDocumentIDParam(e)
+	if err != nil {
+		return err
+	}
+	ctx := e.Request().Context()
+	out, err := c.version.SaveManualVersion(ctx, usecase.SaveManualVersionInput{
+		UserID: userID, DocumentID: documentID,
+	})
+	if err != nil {
+		return handleVersionUseCaseError(e, err)
+	}
+	return e.JSON(http.StatusCreated, dto.Response{Data: dto.SaveManualVersionResponse{
+		ID: out.ID.String(), CreatedAt: out.CreatedAt,
+	}})
+}
+
 func (c *VersionController) Restore(e echo.Context) error {
 	userID, err := authenticatedUserID(e)
 	if err != nil {

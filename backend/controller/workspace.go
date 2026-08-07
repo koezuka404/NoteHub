@@ -208,5 +208,5 @@ func handleWorkspaceUseCaseError(e echo.Context, err error) error {
 }
 
 func writeWorkspaceError(e echo.Context, status int, code, message string) error {
-	return e.JSON(status, dto.ErrorResponse{Error: dto.ErrorBody{Code: code, Message: message}})
+	return appmiddleware.WriteError(e, status, code, message)
 }

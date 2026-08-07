@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { getDocument, getWorkspace } from './api';
+import { deleteDocument, ensureFreshAccessToken, getDocument, getWorkspace, saveManualVersion, updateDocument } from './api';
 import { useAuth } from './auth';
 import { connectDocumentWebSocket, type EditorInfo } from './documentWs';
 import AppLayout from './AppLayout';
+import DocumentMonacoEditor from './DocumentMonacoEditor';
 import { getErrorMessage } from './utils';
 
 export default function DocumentEditorPage() {
@@ -15,12 +16,22 @@ export default function DocumentEditorPage() {
   const [content, setContent] = useState('');
   const [editors, setEditors] = useState<EditorInfo[]>([]);
   const [connected, setConnected] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [wsError, setWsError] = useState('');
+  const [saveMessage, setSaveMessage] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [titleSaving, setTitleSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const wsRef = useRef<ReturnType<typeof connectDocumentWebSocket> | null>(null);
+  const accessTokenRef = useRef<string | null>(accessToken);
   const debounceRef = useRef<number | null>(null);
   const remoteUpdateRef = useRef(false);
+
+  useEffect(() => {
+    accessTokenRef.current = accessToken;
+  }, [accessToken]);
 
   useEffect(() => {
     if (!accessToken || !workspaceId || !documentId) {
@@ -45,6 +56,7 @@ export default function DocumentEditorPage() {
         }
         setWorkspaceName(workspace.name);
         setTitle(document.title);
+        setContent(document.content);
       } catch (err) {
         if (active) {
           setError(getErrorMessage(err));
@@ -66,16 +78,28 @@ export default function DocumentEditorPage() {
       return;
     }
 
-    const connection = connectDocumentWebSocket(documentId, accessToken, {
+    const connection = connectDocumentWebSocket(
+      documentId,
+      {
+        getAccessToken: () => accessTokenRef.current,
+        refreshAccessToken: ensureFreshAccessToken,
+      },
+      {
       onOpen: () => {
         setConnected(true);
+        setReconnecting(false);
         setWsError('');
       },
       onClose: () => {
         setConnected(false);
       },
+      onReconnecting: () => {
+        setConnected(false);
+        setReconnecting(true);
+      },
       onError: (message) => {
         setWsError(message);
+        setReconnecting(false);
       },
       onSync: (nextContent) => {
         remoteUpdateRef.current = true;
@@ -134,7 +158,14 @@ export default function DocumentEditorPage() {
         setConnected(false);
         void navigate('/login', { replace: true });
       },
-    });
+      onMemberRemoved: () => {
+        setWsError('ワークスペースから除外されました');
+        setConnected(false);
+        setReconnecting(false);
+        void navigate('/workspaces', { replace: true });
+      },
+    },
+    );
 
     wsRef.current = connection;
     return () => {
@@ -143,8 +174,9 @@ export default function DocumentEditorPage() {
       }
       connection.close();
       wsRef.current = null;
+      setReconnecting(false);
     };
-  }, [accessToken, documentId, error, loading, navigate, user?.id, workspaceId]);
+  }, [documentId, error, loading, navigate, user?.id, workspaceId]);
 
   function handleContentChange(nextContent: string) {
     setContent(nextContent);
@@ -158,6 +190,62 @@ export default function DocumentEditorPage() {
     debounceRef.current = window.setTimeout(() => {
       wsRef.current?.sendEdit(nextContent);
     }, 300);
+  }
+
+  async function handleManualSave() {
+    if (!accessToken || !documentId) {
+      return;
+    }
+    if (debounceRef.current !== null) {
+      window.clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+      wsRef.current?.sendEdit(content);
+    }
+    setSaving(true);
+    setSaveMessage('');
+    setWsError('');
+    try {
+      await saveManualVersion(accessToken, documentId);
+      setSaveMessage('手動保存しました');
+    } catch (err) {
+      setWsError(getErrorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleTitleSave() {
+    if (!accessToken || !documentId || !title.trim()) {
+      return;
+    }
+    setTitleSaving(true);
+    setWsError('');
+    try {
+      const updated = await updateDocument(accessToken, documentId, title.trim());
+      setTitle(updated.title);
+    } catch (err) {
+      setWsError(getErrorMessage(err));
+    } finally {
+      setTitleSaving(false);
+    }
+  }
+
+  async function handleDeleteDocument() {
+    if (!accessToken || !documentId) {
+      return;
+    }
+    if (!window.confirm('このドキュメントを削除しますか？')) {
+      return;
+    }
+    setDeleting(true);
+    setWsError('');
+    try {
+      await deleteDocument(accessToken, documentId);
+      void navigate(`/workspaces/${workspaceId}/documents`, { replace: true });
+    } catch (err) {
+      setWsError(getErrorMessage(err));
+      setDeleting(false);
+    }
   }
 
   if (loading) {
@@ -189,9 +277,25 @@ export default function DocumentEditorPage() {
             ← {workspaceName}
           </Link>
           <div className="editor-heading">
-            <h2>{title}</h2>
-            <span className={`status-badge ${connected ? 'online' : 'offline'}`}>
-              {connected ? '接続中' : '切断'}
+            <div className="editor-title-form">
+              <input
+                className="editor-title-input"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                maxLength={100}
+                aria-label="ドキュメントタイトル"
+              />
+              <button
+                type="button"
+                className="button compact-button secondary-button"
+                onClick={() => void handleTitleSave()}
+                disabled={titleSaving || !title.trim()}
+              >
+                {titleSaving ? '保存中...' : 'タイトル保存'}
+              </button>
+            </div>
+            <span className={`status-badge ${connected ? 'online' : reconnecting ? 'reconnecting' : 'offline'}`}>
+              {connected ? '接続中' : reconnecting ? '再接続中...' : '切断'}
             </span>
           </div>
         </div>
@@ -202,12 +306,34 @@ export default function DocumentEditorPage() {
           <span>編集中: {editors.length > 0 ? editors.map((editor) => editor.name).join(', ') : 'なし'}</span>
         </div>
 
-        <textarea
-          className="editor-textarea"
-          value={content}
-          onChange={(event) => handleContentChange(event.target.value)}
-          placeholder="ここに入力すると他のタブにも反映されます"
-        />
+        <div className="editor-toolbar">
+          <button
+            type="button"
+            className="button compact-button"
+            onClick={() => void handleManualSave()}
+            disabled={saving}
+          >
+            {saving ? '保存中...' : '手動保存'}
+          </button>
+          <Link
+            to={`/workspaces/${workspaceId}/documents/${documentId}/versions`}
+            className="button compact-button secondary-button link-as-button"
+          >
+            編集履歴
+          </Link>
+          <button
+            type="button"
+            className="button compact-button danger-button"
+            onClick={() => void handleDeleteDocument()}
+            disabled={deleting}
+          >
+            {deleting ? '削除中...' : 'ドキュメント削除'}
+          </button>
+        </div>
+
+        {saveMessage ? <div className="success">{saveMessage}</div> : null}
+
+        <DocumentMonacoEditor value={content} onChange={handleContentChange} />
       </section>
     </AppLayout>
   );

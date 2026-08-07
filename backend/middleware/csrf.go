@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/koezuka404/notehub/dto"
 	"github.com/labstack/echo/v4"
 )
 
@@ -48,7 +47,5 @@ func NewCSRFMiddleware(config CSRFConfig) echo.MiddlewareFunc {
 }
 
 func writeCSRFError(ctx echo.Context, code, message string) error {
-	return ctx.JSON(http.StatusForbidden, dto.ErrorResponse{
-		Error: dto.ErrorBody{Code: code, Message: message},
-	})
+	return WriteError(ctx, http.StatusForbidden, code, message)
 }

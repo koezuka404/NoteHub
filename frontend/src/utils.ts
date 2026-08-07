@@ -121,3 +121,18 @@ export function formatDate(value: string): string {
   }
   return date.toLocaleString('ja-JP');
 }
+
+export function formatVersionType(type: string): string {
+  switch (type) {
+    case 'auto_save':
+      return '自動保存';
+    case 'manual_save':
+      return '手動保存';
+    case 'before_restore':
+      return '復元前';
+    case 'restore':
+      return '復元';
+    default:
+      return type;
+  }
+}

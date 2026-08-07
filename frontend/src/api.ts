@@ -18,10 +18,156 @@ type ApiErrorResponse = {
   error: ApiError;
 };
 
-export async function api<T>(path: string, init: RequestInit = {}, accessToken?: string | null): Promise<T> {
+type AuthHandlers = {
+  onAccessTokenRefreshed: (accessToken: string, expiresAt: string) => void;
+  onAuthFailed: () => void;
+};
+
+type ApiOptions = {
+  accessToken?: string | null;
+  skipAuthRetry?: boolean;
+};
+
+type TokenRefreshResult = {
+  accessToken: string;
+  expiresAt: string;
+};
+
+type AccessTokenListener = (accessToken: string, expiresAt: string) => void;
+
+const PROACTIVE_REFRESH_MARGIN_MS = 60_000;
+
+let authHandlers: AuthHandlers | null = null;
+let refreshPromise: Promise<string> | null = null;
+let proactiveRefreshTimer: number | null = null;
+let accessTokenExpiresAt: string | null = null;
+const accessTokenListeners = new Set<AccessTokenListener>();
+
+export function configureAuthHandlers(handlers: AuthHandlers | null) {
+  authHandlers = handlers;
+}
+
+export function subscribeAccessTokenRefresh(listener: AccessTokenListener): () => void {
+  accessTokenListeners.add(listener);
+  return () => {
+    accessTokenListeners.delete(listener);
+  };
+}
+
+export function stopProactiveRefresh() {
+  if (proactiveRefreshTimer !== null) {
+    window.clearTimeout(proactiveRefreshTimer);
+    proactiveRefreshTimer = null;
+  }
+  accessTokenExpiresAt = null;
+}
+
+function parseExpiresAt(expiresAt: string): number | null {
+  const expiryMs = Date.parse(expiresAt);
+  return Number.isNaN(expiryMs) ? null : expiryMs;
+}
+
+export function isAccessTokenExpiredOrExpiringSoon(marginMs = PROACTIVE_REFRESH_MARGIN_MS): boolean {
+  if (!accessTokenExpiresAt) {
+    return true;
+  }
+  const expiryMs = parseExpiresAt(accessTokenExpiresAt);
+  if (expiryMs === null) {
+    return true;
+  }
+  return Date.now() >= expiryMs - marginMs;
+}
+
+function scheduleProactiveRefresh(expiresAt: string) {
+  stopProactiveRefresh();
+  accessTokenExpiresAt = expiresAt;
+
+  const expiryMs = parseExpiresAt(expiresAt);
+  if (expiryMs === null) {
+    return;
+  }
+
+  const delay = expiryMs - Date.now() - PROACTIVE_REFRESH_MARGIN_MS;
+  proactiveRefreshTimer = window.setTimeout(() => {
+    proactiveRefreshTimer = null;
+    void refreshAccessToken().catch(() => {
+      // onAuthFailed is handled inside refreshAccessToken
+    });
+  }, Math.max(delay, 0));
+}
+
+function notifyAccessTokenRefresh(result: TokenRefreshResult) {
+  authHandlers?.onAccessTokenRefreshed(result.accessToken, result.expiresAt);
+  for (const listener of accessTokenListeners) {
+    listener(result.accessToken, result.expiresAt);
+  }
+  scheduleProactiveRefresh(result.expiresAt);
+}
+
+function applyTokenRefreshResult(result: TokenRefreshResult): TokenRefreshResult {
+  notifyAccessTokenRefresh(result);
+  return result;
+}
+
+function isRefreshableAuthError(status: number, code: string | undefined): boolean {
+  return status === 401 && code === 'ACCESS_TOKEN_EXPIRED';
+}
+
+async function refreshAccessToken(): Promise<string> {
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
+  refreshPromise = (async () => {
+    try {
+      const result = await request<{ accessToken: string; tokenType: string; expiresAt: string }>(
+        '/api/auth/refresh',
+        {
+          method: 'POST',
+          headers: {
+            'X-CSRF-Token': getCsrfToken(),
+          },
+        },
+        { skipAuthRetry: true },
+      );
+      notifyAccessTokenRefresh(result);
+      return result.accessToken;
+    } catch {
+      authHandlers?.onAuthFailed();
+      throw {
+        code: 'ACCESS_TOKEN_EXPIRED',
+        message: 'アクセストークンの有効期限が切れています',
+        status: 401,
+      } satisfies ApiError & { status: number };
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
+export async function ensureFreshAccessToken(currentToken: string | null): Promise<string | null> {
+  if (currentToken && !isAccessTokenExpiredOrExpiringSoon(0)) {
+    return currentToken;
+  }
+  try {
+    return await refreshAccessToken();
+  } catch {
+    return null;
+  }
+}
+
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  options: ApiOptions = {},
+  retried = false,
+): Promise<T> {
   const headers = new Headers(init.headers);
-  if (accessToken) {
-    headers.set('Authorization', `Bearer ${accessToken}`);
+  const token = options.accessToken ?? null;
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
   }
   if (init.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
@@ -36,14 +182,30 @@ export async function api<T>(path: string, init: RequestInit = {}, accessToken?:
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     const error = (payload as ApiErrorResponse | null)?.error;
-    throw {
+    const apiError = {
       code: error?.code ?? 'UNKNOWN_ERROR',
       message: error?.message ?? 'リクエストに失敗しました',
       status: response.status,
     } satisfies ApiError & { status: number };
+
+    if (
+      !options.skipAuthRetry &&
+      !retried &&
+      token &&
+      isRefreshableAuthError(response.status, error?.code)
+    ) {
+      const nextToken = await refreshAccessToken();
+      return request<T>(path, init, { ...options, accessToken: nextToken }, true);
+    }
+
+    throw apiError;
   }
 
   return (payload as ApiResponse<T>).data;
+}
+
+export async function api<T>(path: string, init: RequestInit = {}, accessToken?: string | null): Promise<T> {
+  return request<T>(path, init, { accessToken });
 }
 
 export function getCsrfToken(): string {
@@ -70,20 +232,28 @@ export function register(name: string, email: string, password: string) {
   });
 }
 
-export function login(email: string, password: string) {
-  return api<LoginResult>('/api/auth/login', {
+export async function login(email: string, password: string) {
+  const result = await api<LoginResult>('/api/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   });
+  applyTokenRefreshResult(result);
+  return result;
 }
 
-export function refresh() {
-  return api<{ accessToken: string; tokenType: string; expiresAt: string }>('/api/auth/refresh', {
-    method: 'POST',
-    headers: {
-      'X-CSRF-Token': getCsrfToken(),
+export async function refresh() {
+  const result = await request<{ accessToken: string; tokenType: string; expiresAt: string }>(
+    '/api/auth/refresh',
+    {
+      method: 'POST',
+      headers: {
+        'X-CSRF-Token': getCsrfToken(),
+      },
     },
-  });
+    { skipAuthRetry: true },
+  );
+  applyTokenRefreshResult(result);
+  return result;
 }
 
 export function logout(accessToken: string) {
@@ -156,6 +326,28 @@ export function getWorkspace(accessToken: string, workspaceId: string) {
   return api<WorkspaceDetail>(`/api/workspaces/${workspaceId}`, {}, accessToken);
 }
 
+export function updateWorkspace(accessToken: string, workspaceId: string, name: string) {
+  return api<{ id: string; name: string; updatedAt: string }>(
+    `/api/workspaces/${workspaceId}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
+    },
+    accessToken,
+  );
+}
+
+export function deleteWorkspace(accessToken: string, workspaceId: string, reason: string) {
+  return api<{ workspaceId: string; deletedAt: string }>(
+    `/api/workspaces/${workspaceId}`,
+    {
+      method: 'DELETE',
+      body: JSON.stringify({ reason }),
+    },
+    accessToken,
+  );
+}
+
 export function getDocument(accessToken: string, documentId: string) {
   return api<DocumentDetail>(`/api/documents/${documentId}`, {}, accessToken);
 }
@@ -164,13 +356,32 @@ export function listDocuments(accessToken: string, workspaceId: string) {
   return api<DocumentListItem[]>(`/api/workspaces/${workspaceId}/documents`, {}, accessToken);
 }
 
-export function createDocument(accessToken: string, workspaceId: string, title: string) {
+export function createDocument(accessToken: string, workspaceId: string, title: string, content = '') {
   return api<{ id: string; title: string }>(
     `/api/workspaces/${workspaceId}/documents`,
     {
       method: 'POST',
+      body: JSON.stringify({ title, content }),
+    },
+    accessToken,
+  );
+}
+
+export function updateDocument(accessToken: string, documentId: string, title: string) {
+  return api<{ id: string; title: string; updatedAt: string }>(
+    `/api/documents/${documentId}`,
+    {
+      method: 'PATCH',
       body: JSON.stringify({ title }),
     },
+    accessToken,
+  );
+}
+
+export function deleteDocument(accessToken: string, documentId: string) {
+  return api<{ documentId: string; deletedAt: string }>(
+    `/api/documents/${documentId}`,
+    { method: 'DELETE' },
     accessToken,
   );
 }
@@ -232,6 +443,46 @@ export function reactivateMember(accessToken: string, workspaceId: string, userI
 export function deleteAccount(accessToken: string, workspaceId: string, userId: string) {
   return api<{ userId: string; status: string; deletedAt: string }>(
     `/api/workspaces/${workspaceId}/members/${userId}/delete-account`,
+    { method: 'POST' },
+    accessToken,
+  );
+}
+
+export type VersionListItem = {
+  id: string;
+  versionType: string;
+  createdBy: string;
+  createdAt: string;
+};
+
+export type VersionDetail = {
+  id: string;
+  documentId: string;
+  content: string;
+  versionType: string;
+  createdBy: string;
+  createdAt: string;
+};
+
+export function listVersions(accessToken: string, documentId: string) {
+  return api<VersionListItem[]>(`/api/documents/${documentId}/versions`, {}, accessToken);
+}
+
+export function getVersion(accessToken: string, documentId: string, versionId: string) {
+  return api<VersionDetail>(`/api/documents/${documentId}/versions/${versionId}`, {}, accessToken);
+}
+
+export function saveManualVersion(accessToken: string, documentId: string) {
+  return api<{ id: string; createdAt: string }>(
+    `/api/documents/${documentId}/versions`,
+    { method: 'POST' },
+    accessToken,
+  );
+}
+
+export function restoreVersion(accessToken: string, documentId: string, versionId: string) {
+  return api<{ documentId: string; versionId: string; restoredAt: string }>(
+    `/api/documents/${documentId}/versions/${versionId}/restore`,
     { method: 'POST' },
     accessToken,
   );

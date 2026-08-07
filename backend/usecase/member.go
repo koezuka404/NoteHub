@@ -21,6 +21,10 @@ type IMemberUsecase interface {
 	RemoveMember(ctx context.Context, input RemoveMemberInput) error
 }
 
+type IMemberWebSocketNotifier interface {
+	NotifyMemberRemoved(workspaceID, userID, removedBy uuid.UUID, removedAt string) error
+}
+
 type IAccessCheck interface {
 	CheckWorkspaceAccess(ctx context.Context, input CheckWorkspaceAccessInput) (*WorkspaceAccessResult, error)
 }
@@ -31,6 +35,7 @@ type MemberUseCase struct {
 	auditLogs    repository.AuditLogRepository
 	transactions repository.TransactionManager
 	access       IAccessCheck
+	notifier     IMemberWebSocketNotifier
 	now          func() time.Time
 }
 
@@ -40,6 +45,7 @@ func NewMemberUseCase(
 	auditLogs repository.AuditLogRepository,
 	transactions repository.TransactionManager,
 	access IAccessCheck,
+	notifier IMemberWebSocketNotifier,
 ) *MemberUseCase {
 	return &MemberUseCase{
 		users:        users,
@@ -47,6 +53,7 @@ func NewMemberUseCase(
 		auditLogs:    auditLogs,
 		transactions: transactions,
 		access:       access,
+		notifier:     notifier,
 		now:          time.Now,
 	}
 }
@@ -248,7 +255,7 @@ func (uc *MemberUseCase) RemoveMember(ctx context.Context, input RemoveMemberInp
 	}
 
 	now := uc.currentTime()
-	return uc.transactions.WithinTransaction(ctx, func(txCtx context.Context) error {
+	if err := uc.transactions.WithinTransaction(ctx, func(txCtx context.Context) error {
 		if err := uc.members.Delete(txCtx, input.WorkspaceID, input.TargetUserID); err != nil {
 			return fmt.Errorf("delete workspace member: %w", err)
 		}
@@ -262,7 +269,16 @@ func (uc *MemberUseCase) RemoveMember(ctx context.Context, input RemoveMemberInp
 			return fmt.Errorf("save audit log: %w", err)
 		}
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+
+	if uc.notifier != nil {
+		if err := uc.notifier.NotifyMemberRemoved(input.WorkspaceID, input.TargetUserID, input.UserID, now.Format(timeFormat)); err != nil {
+			return fmt.Errorf("notify member removed: %w", err)
+		}
+	}
+	return nil
 }
 
 // member_search.go

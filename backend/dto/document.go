@@ -1,7 +1,8 @@
 package dto
 
 type CreateDocumentRequest struct {
-	Title string `json:"title"`
+	Title   string `json:"title"`
+	Content string `json:"content"`
 }
 
 type CreateDocumentResponse struct {

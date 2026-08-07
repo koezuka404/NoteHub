@@ -111,5 +111,21 @@ func (p *DocumentEventPublisher) NotifyWorkspaceHostDeleted(workspaceID, hostUse
 	return nil
 }
 
+func (p *DocumentEventPublisher) NotifyMemberRemoved(workspaceID, userID, removedBy uuid.UUID, removedAt string) error {
+	payload, err := MarshalEvent(EventMemberRemoved, MemberRemovedData{
+		WorkspaceID: workspaceID.String(),
+		UserID:      userID.String(),
+		RemovedBy:   removedBy.String(),
+		RemovedAt:   removedAt,
+		Reason:      ReasonMemberRemoved,
+	}, p.now())
+	if err != nil {
+		return err
+	}
+	p.hub.DisconnectUserInWorkspace(workspaceID, userID, payload)
+	return nil
+}
+
 var _ usecase.IDocumentWebSocketNotifier = (*DocumentEventPublisher)(nil)
 var _ usecase.IAccountWebSocketNotifier = (*DocumentEventPublisher)(nil)
+var _ usecase.IMemberWebSocketNotifier = (*DocumentEventPublisher)(nil)

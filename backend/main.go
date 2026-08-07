@@ -114,6 +114,7 @@ func main() {
 		lockStore,
 		transactionManager,
 		30*time.Second,
+		cfg.DocumentAutosaveIdleDuration,
 	)
 	documentFlushBatch := batch.NewDocumentFlushBatch(documentAutoSaveUseCase)
 
@@ -139,6 +140,7 @@ func main() {
 		auditLogRepository,
 		transactionManager,
 		workspaceUseCase,
+		wsEventPublisher,
 	)
 	memberController := controller.NewMemberController(memberUseCase)
 	accountUseCase := usecase.NewAccountUseCase(
@@ -219,6 +221,9 @@ func main() {
 	})
 
 	e := echo.New()
+	e.Use(appmiddleware.NewRecoveryMiddleware())
+	e.Use(appmiddleware.NewRequestIDMiddleware())
+	e.Use(appmiddleware.NewLoggingMiddleware())
 	e.Use(appmiddleware.NewCORSMiddleware(cfg))
 	router.Register(e, router.Deps{
 		Auth:           authController,

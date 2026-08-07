@@ -49,6 +49,7 @@ type Config struct {
 
 	WSMaxConnectionsPerDocument int
 	DocumentAutosaveInterval    time.Duration
+	DocumentAutosaveIdleDuration time.Duration
 
 	CleanupBatchInterval  time.Duration
 	RefreshTokenRetention time.Duration
@@ -100,7 +101,8 @@ func LoadFromEnv(getenv func(string) string) (*Config, error) {
 		RateLimitCapacity:           intValue(getenv("RATE_LIMIT_CAPACITY"), 10),
 		RateLimitRefillRate:         floatValue(getenv("RATE_LIMIT_REFILL_PER_SECOND"), 1),
 		WSMaxConnectionsPerDocument: intValue(getenv("WS_MAX_CONNECTIONS_PER_DOCUMENT"), 3),
-		DocumentAutosaveInterval:    durationValue(getenv("DOCUMENT_AUTOSAVE_INTERVAL"), 5*time.Second),
+		DocumentAutosaveInterval:     durationValue(getenv("DOCUMENT_AUTOSAVE_INTERVAL"), 10*time.Second),
+		DocumentAutosaveIdleDuration: durationValue(getenv("DOCUMENT_AUTOSAVE_IDLE_DURATION"), 60*time.Second),
 		CleanupBatchInterval:        durationValue(getenv("CLEANUP_BATCH_INTERVAL"), time.Hour),
 		RefreshTokenRetention:       durationValue(getenv("REFRESH_TOKEN_RETENTION"), 30*24*time.Hour),
 		BackupEnabled:               boolValue(getenv("BACKUP_ENABLED"), false),
@@ -176,6 +178,9 @@ func (c Config) Validate() error {
 	}
 	if c.DocumentAutosaveInterval < time.Second {
 		errs = append(errs, fmt.Errorf("DOCUMENT_AUTOSAVE_INTERVAL must be at least 1s"))
+	}
+	if c.DocumentAutosaveIdleDuration < time.Second {
+		errs = append(errs, fmt.Errorf("DOCUMENT_AUTOSAVE_IDLE_DURATION must be at least 1s"))
 	}
 	if c.CleanupBatchInterval < time.Minute {
 		errs = append(errs, fmt.Errorf("CLEANUP_BATCH_INTERVAL must be at least 1m"))

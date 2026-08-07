@@ -39,6 +39,7 @@ type IDocumentCache interface {
 	MarkClean(ctx context.Context, documentID uuid.UUID) error
 	GetRevision(ctx context.Context, documentID uuid.UUID) (uint64, error)
 	ListDirtyDocumentIDs(ctx context.Context) ([]uuid.UUID, error)
+	ListIdleDirtyDocumentIDs(ctx context.Context, idle time.Duration) ([]uuid.UUID, error)
 	Clear(ctx context.Context, documentID uuid.UUID) error
 }
 
@@ -163,6 +164,7 @@ type CreateDocumentInput struct {
 	UserID      uuid.UUID
 	WorkspaceID uuid.UUID
 	Title       string
+	Content     string
 	IPAddress   string
 }
 
@@ -179,12 +181,15 @@ func (uc *DocumentUseCase) CreateDocument(ctx context.Context, input CreateDocum
 	if err := validTitle(input.Title); err != nil {
 		return nil, err
 	}
+	if err := validDocumentContent(input.Content); err != nil {
+		return nil, err
+	}
 	if err := uc.requireMember(ctx, input.UserID, input.WorkspaceID); err != nil {
 		return nil, err
 	}
 
 	now := uc.currentTime()
-	doc, err := entity.NewDocument(input.WorkspaceID, input.UserID, normalizeTitle(input.Title), "", now)
+	doc, err := entity.NewDocument(input.WorkspaceID, input.UserID, normalizeTitle(input.Title), input.Content, now)
 	if err != nil {
 		return nil, fmt.Errorf("create document entity: %w", err)
 	}

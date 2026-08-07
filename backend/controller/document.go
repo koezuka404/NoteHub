@@ -33,7 +33,7 @@ func (c *DocumentController) Create(e echo.Context) error {
 	}
 	ctx := e.Request().Context()
 	out, err := c.doc.CreateDocument(ctx, usecase.CreateDocumentInput{
-		UserID: userID, WorkspaceID: workspaceID, Title: req.Title, IPAddress: e.RealIP(),
+		UserID: userID, WorkspaceID: workspaceID, Title: req.Title, Content: req.Content, IPAddress: e.RealIP(),
 	})
 	if err != nil {
 		return handleDocumentUseCaseError(e, err)
@@ -155,6 +155,8 @@ func handleDocumentUseCaseError(e echo.Context, err error) error {
 		return writeWorkspaceError(e, http.StatusNotFound, "DOCUMENT_NOT_FOUND", "ドキュメントが見つかりません")
 	case errors.Is(err, usecase.ErrDocumentDeleted):
 		return writeWorkspaceError(e, http.StatusNotFound, "DOCUMENT_DELETED", "ドキュメントは削除されています")
+	case errors.Is(err, usecase.ErrDocumentContentTooLarge):
+		return writeWorkspaceError(e, http.StatusBadRequest, "DOCUMENT_CONTENT_TOO_LARGE", "ドキュメント本文が上限を超えています")
 	default:
 		return handleWorkspaceUseCaseError(e, err)
 	}

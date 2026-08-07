@@ -15,6 +15,7 @@ func NewCORSMiddleware(cfg *config.Config) echo.MiddlewareFunc {
 		AllowOrigins:     origins,
 		AllowCredentials: true,
 		AllowMethods:     []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Authorization", "Content-Type", "X-CSRF-Token"},
+		AllowHeaders:     []string{"Authorization", "Content-Type", "X-CSRF-Token", RequestIDHeader},
+		ExposeHeaders:    []string{RequestIDHeader},
 	})
 }

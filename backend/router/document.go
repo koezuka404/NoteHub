@@ -18,6 +18,7 @@ func registerDocumentRoutes(
 	documents.DELETE("/:documentId", document.Delete, rateLimit)
 
 	documents.GET("/:documentId/versions", version.List)
+	documents.POST("/:documentId/versions", version.Save, rateLimit)
 	documents.GET("/:documentId/versions/:versionId", version.Get)
 	documents.POST("/:documentId/versions/:versionId/restore", version.Restore, rateLimit)
 }

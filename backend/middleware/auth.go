@@ -9,7 +9,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	infrcrypto "github.com/koezuka404/notehub/usecase/crypto"
-	"github.com/koezuka404/notehub/dto"
 	"github.com/koezuka404/notehub/entity"
 	"github.com/labstack/echo/v4"
 )
@@ -94,5 +93,5 @@ func (m *AuthMiddleware) Handle(next echo.HandlerFunc) echo.HandlerFunc {
 }
 
 func writeAuthMiddlewareError(ctx echo.Context, status int, code, message string) error {
-	return ctx.JSON(status, dto.ErrorResponse{Error: dto.ErrorBody{Code: code, Message: message}})
+	return WriteError(ctx, status, code, message)
 }

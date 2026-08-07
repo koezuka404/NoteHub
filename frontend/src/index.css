@@ -329,8 +329,55 @@ body {
 
 .editor-heading {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 12px;
+}
+
+.editor-title-form {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  align-items: center;
+}
+
+.editor-title-input {
+  flex: 1;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.editor-title-input:focus {
+  outline: 2px solid #2563eb;
+  border-color: #2563eb;
+}
+
+.workspace-settings {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.workspace-delete-form {
+  margin-top: 16px;
+}
+
+.reason-textarea {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: inherit;
+  resize: vertical;
+}
+
+.reason-textarea:focus {
+  outline: 2px solid #2563eb;
+  border-color: #2563eb;
 }
 
 .status-badge {
@@ -352,10 +399,59 @@ body {
   color: #b91c1c;
 }
 
+.status-badge.reconnecting {
+  background: #fffbeb;
+  color: #b45309;
+}
+
 .editor-meta {
   margin-bottom: 12px;
   color: #6b7280;
   font-size: 0.875rem;
+}
+
+.editor-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.version-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.version-back-link {
+  width: auto;
+  min-width: 120px;
+  padding: 12px 16px;
+}
+
+.create-document-form {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.create-document-form .field {
+  margin-bottom: 0;
+}
+
+.create-document-form .compact-button {
+  justify-self: start;
+}
+
+.editor-monaco {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.editor-monaco:focus-within {
+  outline: 2px solid #2563eb;
+  border-color: #2563eb;
 }
 
 .editor-textarea {

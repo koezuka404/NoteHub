@@ -19,6 +19,7 @@ type DocumentAutoSaveUseCase struct {
 	locks        IAutoSaveLockStore
 	transactions repository.TransactionManager
 	lockTTL      time.Duration
+	idleDuration time.Duration
 	now          func() time.Time
 }
 
@@ -29,9 +30,13 @@ func NewDocumentAutoSaveUseCase(
 	locks IAutoSaveLockStore,
 	transactions repository.TransactionManager,
 	lockTTL time.Duration,
+	idleDuration time.Duration,
 ) *DocumentAutoSaveUseCase {
 	if lockTTL <= 0 {
 		lockTTL = 30 * time.Second
+	}
+	if idleDuration <= 0 {
+		idleDuration = 60 * time.Second
 	}
 	return &DocumentAutoSaveUseCase{
 		docs:         docs,
@@ -40,6 +45,7 @@ func NewDocumentAutoSaveUseCase(
 		locks:        locks,
 		transactions: transactions,
 		lockTTL:      lockTTL,
+		idleDuration: idleDuration,
 		now:          time.Now,
 	}
 }
@@ -47,11 +53,21 @@ func NewDocumentAutoSaveUseCase(
 var _ IDocumentFlushService = (*DocumentAutoSaveUseCase)(nil)
 
 func (uc *DocumentAutoSaveUseCase) RunOnce(ctx context.Context) error {
-	return uc.FlushAllDirty(ctx)
+	return uc.flushDirty(ctx, uc.idleDuration)
 }
 
 func (uc *DocumentAutoSaveUseCase) FlushAllDirty(ctx context.Context) error {
-	documentIDs, err := uc.cache.ListDirtyDocumentIDs(ctx)
+	return uc.flushDirty(ctx, 0)
+}
+
+func (uc *DocumentAutoSaveUseCase) flushDirty(ctx context.Context, idle time.Duration) error {
+	var documentIDs []uuid.UUID
+	var err error
+	if idle > 0 {
+		documentIDs, err = uc.cache.ListIdleDirtyDocumentIDs(ctx, idle)
+	} else {
+		documentIDs, err = uc.cache.ListDirtyDocumentIDs(ctx)
+	}
 	if err != nil {
 		return fmt.Errorf("list dirty documents: %w", err)
 	}

@@ -13,7 +13,6 @@ import (
 	"github.com/google/uuid"
 	gorillaws "github.com/gorilla/websocket"
 	"github.com/koezuka404/notehub/config"
-	"github.com/koezuka404/notehub/dto"
 	appmiddleware "github.com/koezuka404/notehub/middleware"
 	"github.com/koezuka404/notehub/usecase"
 	appws "github.com/koezuka404/notehub/websocket"
@@ -324,7 +323,7 @@ func toEditorEventData(editors []usecase.DocumentEditorInfo) []appws.EditorEvent
 }
 
 func writeWebSocketHTTPError(e echo.Context, status int, code, message string) error {
-	return e.JSON(status, dto.ErrorResponse{Error: dto.ErrorBody{Code: code, Message: message}})
+	return appmiddleware.WriteError(e, status, code, message)
 }
 
 func handleWebSocketUseCaseError(e echo.Context, err error) error {

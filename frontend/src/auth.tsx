@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -24,6 +25,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<api.AuthUser | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const accessTokenRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    accessTokenRef.current = accessToken;
+  }, [accessToken]);
+
+  useEffect(() => {
+    api.configureAuthHandlers({
+      onAccessTokenRefreshed: (token, _expiresAt) => {
+        accessTokenRef.current = token;
+        setAccessToken(token);
+      },
+      onAuthFailed: () => {
+        api.stopProactiveRefresh();
+        accessTokenRef.current = null;
+        setAccessToken(null);
+        setUser(null);
+      },
+    });
+    return () => {
+      api.configureAuthHandlers(null);
+      api.stopProactiveRefresh();
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -34,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
         setAccessToken(result.accessToken);
+        accessTokenRef.current = result.accessToken;
         const current = await api.me(result.accessToken);
         if (active) {
           setUser(current.user);
@@ -56,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const result = await api.login(email, password);
+    accessTokenRef.current = result.accessToken;
     setAccessToken(result.accessToken);
     setUser(result.user);
   }, []);
@@ -63,21 +90,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = useCallback(async (name: string, email: string, password: string) => {
     await api.register(name, email, password);
     const result = await api.login(email, password);
+    accessTokenRef.current = result.accessToken;
     setAccessToken(result.accessToken);
     setUser(result.user);
   }, []);
 
   const logout = useCallback(async () => {
-    if (accessToken) {
+    const token = accessTokenRef.current;
+    api.stopProactiveRefresh();
+    if (token) {
       try {
-        await api.logout(accessToken);
+        await api.logout(token);
       } catch {
         // ログアウトは冪等なので失敗してもローカル状態はクリアする
       }
     }
+    accessTokenRef.current = null;
     setAccessToken(null);
     setUser(null);
-  }, [accessToken]);
+  }, []);
 
   const value = useMemo(
     () => ({ user, accessToken, loading, login, register, logout }),

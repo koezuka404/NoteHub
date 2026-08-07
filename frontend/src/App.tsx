@@ -1,5 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import DocumentEditorPage from './DocumentEditorPage';
+import DocumentVersionDetailPage from './DocumentVersionDetailPage';
+import DocumentVersionsPage from './DocumentVersionsPage';
 import DocumentsPage from './DocumentsPage';
 import LoginPage from './LoginPage';
 import MembersPage from './MembersPage';
@@ -22,6 +24,11 @@ export default function App() {
           <Route path="/workspaces/:workspaceId/documents" element={<DocumentsPage />} />
           <Route path="/workspaces/:workspaceId/members" element={<MembersPage />} />
           <Route path="/workspaces/:workspaceId/documents/:documentId" element={<DocumentEditorPage />} />
+          <Route path="/workspaces/:workspaceId/documents/:documentId/versions" element={<DocumentVersionsPage />} />
+          <Route
+            path="/workspaces/:workspaceId/documents/:documentId/versions/:versionId"
+            element={<DocumentVersionDetailPage />}
+          />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -16,6 +16,11 @@ type GetVersionResponse struct {
 	CreatedAt  string `json:"createdAt"`
 }
 
+type SaveManualVersionResponse struct {
+	ID        string `json:"id"`
+	CreatedAt string `json:"createdAt"`
+}
+
 type RestoreVersionResponse struct {
 	DocumentID string `json:"documentId"`
 	VersionID  string `json:"versionId"`

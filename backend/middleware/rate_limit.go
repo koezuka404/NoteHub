@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/koezuka404/notehub/dto"
 	"github.com/labstack/echo/v4"
 )
 
@@ -39,9 +38,7 @@ func (m *RateLimitMiddleware) Handle(next echo.HandlerFunc) echo.HandlerFunc {
 			m.config.Capacity, m.config.RefillPerSecond, m.now().UTC(),
 		)
 		if err != nil {
-			return ctx.JSON(http.StatusServiceUnavailable, dto.ErrorResponse{Error: dto.ErrorBody{
-				Code: "RATE_LIMIT_SERVICE_UNAVAILABLE", Message: "アクセス制限サービスを利用できません",
-			}})
+			return WriteError(ctx, http.StatusServiceUnavailable, "RATE_LIMIT_SERVICE_UNAVAILABLE", "アクセス制限サービスを利用できません")
 		}
 		if !allowed {
 			seconds := int(math.Ceil(retryAfter.Seconds()))
@@ -49,9 +46,7 @@ func (m *RateLimitMiddleware) Handle(next echo.HandlerFunc) echo.HandlerFunc {
 				seconds = 1
 			}
 			ctx.Response().Header().Set("Retry-After", strconv.Itoa(seconds))
-			return ctx.JSON(http.StatusTooManyRequests, dto.ErrorResponse{Error: dto.ErrorBody{
-				Code: "RATE_LIMIT_EXCEEDED", Message: "リクエスト回数が上限を超えました",
-			}})
+			return WriteError(ctx, http.StatusTooManyRequests, "RATE_LIMIT_EXCEEDED", "リクエスト回数が上限を超えました")
 		}
 		return next(ctx)
 	}

@@ -185,12 +185,24 @@ func (s *DocumentCacheStore) GetRevision(ctx context.Context, documentID uuid.UU
 }
 
 func (s *DocumentCacheStore) ListDirtyDocumentIDs(ctx context.Context) ([]uuid.UUID, error) {
+	return s.listDirtyDocumentIDs(ctx, 0)
+}
+
+func (s *DocumentCacheStore) ListIdleDirtyDocumentIDs(ctx context.Context, idle time.Duration) ([]uuid.UUID, error) {
+	if idle <= 0 {
+		return s.ListDirtyDocumentIDs(ctx)
+	}
+	return s.listDirtyDocumentIDs(ctx, idle)
+}
+
+func (s *DocumentCacheStore) listDirtyDocumentIDs(ctx context.Context, idle time.Duration) ([]uuid.UUID, error) {
 	ctx, cancel := s.withTimeout(ctx)
 	defer cancel()
 
 	pattern := documentContentKeyPrefix + "*" + documentAutosaveKeySuffix
 	var ids []uuid.UUID
 	seen := make(map[uuid.UUID]struct{})
+	now := time.Now().UTC()
 
 	iter := s.client.Scan(ctx, 0, pattern, 100).Iterator()
 	for iter.Next(ctx) {
@@ -212,6 +224,15 @@ func (s *DocumentCacheStore) ListDirtyDocumentIDs(ctx context.Context) ([]uuid.U
 		}
 		if !value.Dirty {
 			continue
+		}
+		if idle > 0 {
+			updatedAt, err := time.Parse(time.RFC3339, value.UpdatedAt)
+			if err != nil {
+				continue
+			}
+			if now.Sub(updatedAt.UTC()) < idle {
+				continue
+			}
 		}
 		if _, ok := seen[documentID]; ok {
 			continue
