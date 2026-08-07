@@ -175,6 +175,44 @@ export function createDocument(accessToken: string, workspaceId: string, title: 
   );
 }
 
+export type SearchUserResult = {
+  id: string;
+  email: string;
+  name: string;
+  status: string;
+};
+
+export type MemberListItem = {
+  userId: string;
+  name: string;
+  email: string;
+  status: string;
+  role: string;
+  joinedAt: string;
+};
+
+export function searchUser(accessToken: string, workspaceId: string, email: string) {
+  const params = new URLSearchParams({ email });
+  return api<SearchUserResult>(`/api/workspaces/${workspaceId}/users/search?${params}`, {}, accessToken);
+}
+
+export function listMembers(accessToken: string, workspaceId: string) {
+  return api<MemberListItem[]>(`/api/workspaces/${workspaceId}/members`, {}, accessToken);
+}
+
+export function addMember(accessToken: string, workspaceId: string, userId: string) {
+  return api<MemberListItem>(`/api/workspaces/${workspaceId}/members`, {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  }, accessToken);
+}
+
+export function removeMember(accessToken: string, workspaceId: string, userId: string) {
+  return api<Record<string, never>>(`/api/workspaces/${workspaceId}/members/${userId}`, {
+    method: 'DELETE',
+  }, accessToken);
+}
+
 export function validatePassword(password: string): string | null {
   if (password.length < 8 || password.length > 15) {
     return 'パスワードは8文字以上15文字以下で入力してください';

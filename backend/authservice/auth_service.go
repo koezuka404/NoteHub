@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/koezuka404/notehub/crypto"
+	"github.com/koezuka404/notehub/usecase/crypto"
 	"github.com/koezuka404/notehub/redis"
 )
 

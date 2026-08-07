@@ -1,15 +1,9 @@
 import { FormEvent, useState } from 'react';
-import { validatePassword, type ApiError } from './api';
+import { validatePassword } from './api';
 import { useAuth } from './auth';
+import { getErrorMessage } from './utils';
 
 type Mode = 'login' | 'register';
-
-function getErrorMessage(error: unknown): string {
-  if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as ApiError).message);
-  }
-  return 'リクエストに失敗しました';
-}
 
 export default function LoginPage() {
   const { login, register } = useAuth();

@@ -1,3 +1,5 @@
+import { getErrorMessage } from './utils';
+
 export type EditorInfo = {
   userId: string;
   name: string;
@@ -126,9 +128,12 @@ export function connectDocumentWebSocket(
       case 'workspace_deleted':
         handlers.onWorkspaceDeleted?.();
         break;
-      case 'error':
-        handlers.onError?.(String(envelope.data.message ?? 'WebSocket エラー'));
+      case 'error': {
+        const code = String(envelope.data.code ?? '');
+        const message = String(envelope.data.message ?? '');
+        handlers.onError?.(getErrorMessage({ code, message }));
         break;
+      }
       default:
         break;
     }

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { createWorkspace, listWorkspaces, type WorkspaceListItem } from './api';
 import { useAuth } from './auth';
 import AppLayout from './AppLayout';
-import { getErrorMessage } from './utils';
+import { formatRole, formatUnavailableReason, getErrorMessage } from './utils';
 
 export default function WorkspacesPage() {
   const { accessToken } = useAuth();
@@ -75,14 +75,15 @@ export default function WorkspacesPage() {
                 <Link to={`/workspaces/${workspace.id}/documents`} className="list-button list-link">
                   <span className="list-title">{workspace.name}</span>
                   <span className="list-meta">
-                    {workspace.role} · 利用可能
+                    {formatRole(workspace.role)} ·{' '}
+                    {workspace.isAvailable ? '利用可能' : formatUnavailableReason(workspace.unavailableReason)}
                   </span>
                 </Link>
               ) : (
                 <div className="list-button list-button-static" aria-disabled="true">
                   <span className="list-title">{workspace.name}</span>
                   <span className="list-meta">
-                    {workspace.role} · {workspace.unavailableReason}
+                    {formatRole(workspace.role)} · {formatUnavailableReason(workspace.unavailableReason)}
                   </span>
                 </div>
               )}

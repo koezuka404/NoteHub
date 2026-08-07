@@ -70,6 +70,12 @@ export default function DocumentsPage() {
             ← ワークスペース一覧
           </Link>
           <h2>{workspace?.name ?? 'ドキュメント'}</h2>
+          <nav className="workspace-nav">
+            <span className="workspace-nav-link active">ドキュメント</span>
+            <Link to={`/workspaces/${workspaceId}/members`} className="workspace-nav-link">
+              メンバー
+            </Link>
+          </nav>
         </div>
         <form className="inline-form" onSubmit={handleCreateDocument}>
           <input

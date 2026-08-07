@@ -16,7 +16,7 @@ import (
 	"github.com/koezuka404/notehub/batch"
 	"github.com/koezuka404/notehub/config"
 	"github.com/koezuka404/notehub/controller"
-	infrcrypto "github.com/koezuka404/notehub/crypto"
+	infrcrypto "github.com/koezuka404/notehub/usecase/crypto"
 	"github.com/koezuka404/notehub/db"
 	appmiddleware "github.com/koezuka404/notehub/middleware"
 	appredis "github.com/koezuka404/notehub/redis"
@@ -222,6 +222,10 @@ func main() {
 	})
 	go func() {
 		address := ":" + strconv.Itoa(cfg.HTTPPort)
+		if publicURL := os.Getenv("PUBLIC_HTTP_URL"); publicURL != "" {
+			log.Printf("NoteHub backend ready at %s", publicURL)
+			log.Printf("Health check: %s/health", publicURL)
+		}
 		log.Printf("listening on %s", address)
 		if err := e.Start(address); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server: %v", err)

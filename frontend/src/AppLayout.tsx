@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { useAuth } from './auth';
 
@@ -14,9 +13,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
       <header className="app-header">
         <div>
           <h1 className="app-title">NoteHub</h1>
-          <Link to="/" className="app-home-link">
-            トップへ
-          </Link>
         </div>
         <button type="button" className="button secondary-button header-button" onClick={() => void logout()}>
           ログアウト

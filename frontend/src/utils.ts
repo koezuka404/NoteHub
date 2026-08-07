@@ -1,10 +1,109 @@
 import type { ApiError } from './api';
 
+const ERROR_MESSAGES: Record<string, string> = {
+  UNKNOWN_ERROR: 'リクエストに失敗しました',
+  INVALID_REQUEST: 'リクエスト形式が不正です',
+  VALIDATION_ERROR: '入力値が不正です',
+  PASSWORD_INVALID: 'パスワードの入力内容を確認してください',
+  EMAIL_ALREADY_EXISTS: 'このメールアドレスは既に登録されています',
+  INVALID_CREDENTIALS: 'メールアドレスまたはパスワードが正しくありません',
+  LOGIN_RATE_LIMITED: '時間を空けて再度お試しください',
+  REFRESH_TOKEN_REQUIRED: 'リフレッシュトークンが必要です',
+  REFRESH_TOKEN_EXPIRED: 'リフレッシュトークンの有効期限が切れています',
+  REFRESH_TOKEN_INVALID: 'リフレッシュトークンが不正です',
+  REFRESH_TOKEN_REVOKED: 'リフレッシュトークンは失効しています',
+  TOKEN_OWNER_MISMATCH: 'トークンの所有者が一致しません',
+  CSRF_TOKEN_INVALID: 'CSRFトークンが不正です',
+  CSRF_TOKEN_REQUIRED: 'CSRFトークンが必要です',
+  AUTH_SERVICE_UNAVAILABLE: '認証サービスを利用できません',
+  ACCESS_TOKEN_INVALID: 'アクセストークンが不正です',
+  ACCESS_TOKEN_REQUIRED: 'アクセストークンが必要です',
+  ACCESS_TOKEN_EXPIRED: 'アクセストークンの有効期限が切れています',
+  ACCESS_TOKEN_REVOKED: 'アクセストークンは失効しています',
+  ACCOUNT_UNAVAILABLE: 'このアカウントは利用できません',
+  INTERNAL_ERROR: '内部エラーが発生しました',
+  DATABASE_ERROR: 'データベース処理に失敗しました',
+  WORKSPACE_NOT_FOUND: 'ワークスペースが見つかりません',
+  WORKSPACE_ALREADY_DELETED: 'ワークスペースは既に削除されています',
+  WORKSPACE_ACCESS_DENIED: 'このワークスペースへアクセスできません',
+  WORKSPACE_PERMISSION_DENIED: 'この操作を実行する権限がありません',
+  HOST_PERMISSION_REQUIRED: 'ホスト権限が必要です',
+  WORKSPACE_HOST_SUSPENDED: 'ホストが停止されているため利用できません',
+  WORKSPACE_HOST_DELETED: 'ホストが削除されているため利用できません',
+  HOST_SUSPENDED: 'ホストが停止されているため利用できません',
+  HOST_DELETED: 'ホストが削除されているため利用できません',
+  USER_NOT_FOUND: 'ユーザーが見つかりません',
+  TARGET_USER_NOT_FOUND: 'ユーザーが見つかりません',
+  TARGET_ACCOUNT_UNAVAILABLE: 'このユーザーを追加できません',
+  CANNOT_ADD_SELF: '自分自身を追加できません',
+  MEMBER_ALREADY_EXISTS: '既に参加しています',
+  MEMBER_NOT_FOUND: 'メンバーが見つかりません',
+  CANNOT_REMOVE_HOST: 'ホストを削除できません',
+  DOCUMENT_NOT_FOUND: 'ドキュメントが見つかりません',
+  DOCUMENT_DELETED: 'ドキュメントは削除されています',
+  DOCUMENT_CONFLICT: 'ドキュメントが更新されています',
+  DOCUMENT_CONTENT_TOO_LARGE: 'ドキュメント本文が上限を超えています',
+  VERSION_NOT_FOUND: '編集履歴が見つかりません',
+  WEBSOCKET_TLS_REQUIRED: 'WSS接続が必要です',
+  WEBSOCKET_CONNECTION_LIMIT_EXCEEDED: 'WebSocket接続数の上限に達しています',
+  UNSUPPORTED_EVENT: '未対応のイベントです',
+  RATE_LIMIT_SERVICE_UNAVAILABLE: 'アクセス制限サービスを利用できません',
+  RATE_LIMIT_EXCEEDED: 'リクエスト回数が上限を超えました',
+};
+
 export function getErrorMessage(error: unknown): string {
-  if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as ApiError).message);
+  if (error instanceof TypeError) {
+    return 'サーバーに接続できません';
   }
-  return 'リクエストに失敗しました';
+
+  if (error && typeof error === 'object') {
+    const apiError = error as ApiError & { status?: number };
+    if (apiError.code && ERROR_MESSAGES[apiError.code]) {
+      return ERROR_MESSAGES[apiError.code];
+    }
+    if (apiError.message) {
+      if (ERROR_MESSAGES[apiError.message]) {
+        return ERROR_MESSAGES[apiError.message];
+      }
+      if (apiError.message === 'Failed to fetch') {
+        return 'サーバーに接続できません';
+      }
+      return apiError.message;
+    }
+  }
+
+  return ERROR_MESSAGES.UNKNOWN_ERROR;
+}
+
+export function formatRole(role: string): string {
+  switch (role) {
+    case 'host':
+      return 'ホスト';
+    case 'member':
+      return 'メンバー';
+    default:
+      return role;
+  }
+}
+
+export function formatUserStatus(status: string): string {
+  switch (status) {
+    case 'active':
+      return '有効';
+    case 'suspended':
+      return '停止中';
+    case 'deleted':
+      return '削除済み';
+    default:
+      return status;
+  }
+}
+
+export function formatUnavailableReason(reason: string): string {
+  if (!reason) {
+    return '利用不可';
+  }
+  return ERROR_MESSAGES[reason] ?? reason;
 }
 
 export function formatDate(value: string): string {
