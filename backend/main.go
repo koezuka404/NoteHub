@@ -141,6 +141,16 @@ func main() {
 		workspaceUseCase,
 	)
 	memberController := controller.NewMemberController(memberUseCase)
+	accountUseCase := usecase.NewAccountUseCase(
+		userRepository,
+		refreshTokenRepository,
+		workspaceMemberRepository,
+		auditLogRepository,
+		transactionManager,
+		workspaceUseCase,
+		wsEventPublisher,
+	)
+	accountController := controller.NewAccountController(accountUseCase)
 
 	documentWebSocketUseCase := usecase.NewDocumentWebSocketUseCase(
 		documentRepository,
@@ -213,6 +223,7 @@ func main() {
 		Auth:           authController,
 		Workspace:      workspaceController,
 		Member:         memberController,
+		Account:        accountController,
 		Document:       documentController,
 		Version:        versionController,
 		WebSocket:      webSocketController,

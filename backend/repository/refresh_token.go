@@ -17,6 +17,7 @@ type RefreshTokenRepository interface {
 	FindByHashForUpdate(ctx context.Context, tokenHash string) (*entity.RefreshToken, bool, error)
 	Update(ctx context.Context, token *entity.RefreshToken) error
 	RevokeFamily(ctx context.Context, familyID uuid.UUID, now time.Time) error
+	RevokeAllByUserID(ctx context.Context, userID uuid.UUID, now time.Time) error
 	MarkExpiredBefore(ctx context.Context, now time.Time) (int64, error)
 	DeleteStaleBefore(ctx context.Context, cutoff time.Time) (int64, error)
 }
@@ -59,6 +60,19 @@ func (r *refreshTokenRepository) RevokeFamily(ctx context.Context, familyID uuid
 		Updates(map[string]any{"status": entity.RefreshTokenStatusRevoked, "revoked_at": now, "updated_at": now})
 	if result.Error != nil {
 		return fmt.Errorf("revoke refresh token family: %w", result.Error)
+	}
+	return nil
+}
+
+func (r *refreshTokenRepository) RevokeAllByUserID(ctx context.Context, userID uuid.UUID, now time.Time) error {
+	result := dbFromContext(ctx, r.db).Model(&entity.RefreshToken{}).
+		Where("user_id = ? AND status IN ?", userID, []entity.RefreshTokenStatus{
+			entity.RefreshTokenStatusActive,
+			entity.RefreshTokenStatusRotated,
+		}).
+		Updates(map[string]any{"status": entity.RefreshTokenStatusRevoked, "revoked_at": now, "updated_at": now})
+	if result.Error != nil {
+		return fmt.Errorf("revoke refresh tokens by user id: %w", result.Error)
 	}
 	return nil
 }

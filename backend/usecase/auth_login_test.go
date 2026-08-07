@@ -21,6 +21,10 @@ func (m *mockUserRepo) Create(context.Context, *entity.User) error { return nil 
 func (m *mockUserRepo) FindByID(context.Context, uuid.UUID) (*entity.User, bool, error) {
 	return nil, false, nil
 }
+func (m *mockUserRepo) FindByIDForUpdate(context.Context, uuid.UUID) (*entity.User, bool, error) {
+	return nil, false, nil
+}
+func (m *mockUserRepo) Update(context.Context, *entity.User) error { return nil }
 func (m *mockUserRepo) FindByEmail(_ context.Context, email string) (*entity.User, bool, error) {
 	if m.err != nil {
 		return nil, false, m.err
@@ -55,6 +59,9 @@ func (m *mockRefreshTokenRepo) FindByHashForUpdate(context.Context, string) (*en
 }
 func (m *mockRefreshTokenRepo) Update(context.Context, *entity.RefreshToken) error { return nil }
 func (m *mockRefreshTokenRepo) RevokeFamily(context.Context, uuid.UUID, time.Time) error {
+	return nil
+}
+func (m *mockRefreshTokenRepo) RevokeAllByUserID(context.Context, uuid.UUID, time.Time) error {
 	return nil
 }
 func (m *mockRefreshTokenRepo) MarkExpiredBefore(context.Context, time.Time) (int64, error) {

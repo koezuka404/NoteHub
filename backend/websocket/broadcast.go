@@ -57,4 +57,18 @@ func (p *DocumentEventPublisher) NotifyWorkspaceDeleted(workspaceID, deletedBy u
 	return nil
 }
 
+func (p *DocumentEventPublisher) NotifyAccountSuspended(userID uuid.UUID, suspendedAt string) error {
+	payload, err := MarshalEvent(EventAccountSuspended, AccountSuspendedData{
+		UserID:      userID.String(),
+		SuspendedAt: suspendedAt,
+		Reason:      ReasonAccountSuspended,
+	}, p.now())
+	if err != nil {
+		return err
+	}
+	p.hub.DisconnectUser(userID, payload)
+	return nil
+}
+
 var _ usecase.IDocumentWebSocketNotifier = (*DocumentEventPublisher)(nil)
+var _ usecase.IAccountWebSocketNotifier = (*DocumentEventPublisher)(nil)

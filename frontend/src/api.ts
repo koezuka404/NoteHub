@@ -213,6 +213,14 @@ export function removeMember(accessToken: string, workspaceId: string, userId: s
   }, accessToken);
 }
 
+export function suspendMember(accessToken: string, workspaceId: string, userId: string) {
+  return api<{ userId: string; status: string; suspendedAt: string }>(
+    `/api/workspaces/${workspaceId}/members/${userId}/suspend`,
+    { method: 'POST' },
+    accessToken,
+  );
+}
+
 export function validatePassword(password: string): string | null {
   if (password.length < 8 || password.length > 15) {
     return 'パスワードは8文字以上15文字以下で入力してください';

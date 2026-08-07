@@ -114,6 +114,11 @@ export default function DocumentEditorPage() {
         setConnected(false);
         void navigate('/workspaces', { replace: true });
       },
+      onAccountSuspended: () => {
+        setWsError('アカウントが停止されました');
+        setConnected(false);
+        void navigate('/login', { replace: true });
+      },
     });
 
     wsRef.current = connection;

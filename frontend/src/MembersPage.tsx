@@ -6,6 +6,7 @@ import {
   listMembers,
   removeMember,
   searchUser,
+  suspendMember,
   type MemberListItem,
   type SearchUserResult,
   type WorkspaceDetail,
@@ -26,6 +27,7 @@ export default function MembersPage() {
   const [searching, setSearching] = useState(false);
   const [adding, setAdding] = useState(false);
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
+  const [suspendingUserId, setSuspendingUserId] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   const isHost = workspace?.role === 'host';
@@ -121,6 +123,25 @@ export default function MembersPage() {
     }
   }
 
+  async function handleSuspendMember(targetUserId: string, targetName: string) {
+    if (!accessToken || !workspaceId) {
+      return;
+    }
+    if (!window.confirm(`${targetName} のアカウントを停止しますか？\n停止後はログイン・API・編集ができなくなります。`)) {
+      return;
+    }
+    setSuspendingUserId(targetUserId);
+    setError('');
+    try {
+      await suspendMember(accessToken, workspaceId, targetUserId);
+      await loadMembers();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setSuspendingUserId(null);
+    }
+  }
+
   return (
     <AppLayout>
       {error ? <div className="error app-error">{error}</div> : null}
@@ -194,14 +215,26 @@ export default function MembersPage() {
                     </span>
                   </div>
                   {isHost && member.role !== 'host' ? (
-                    <button
-                      type="button"
-                      className="button compact-button danger-button"
-                      disabled={removingUserId === member.userId}
-                      onClick={() => void handleRemoveMember(member.userId, member.name)}
-                    >
-                      {removingUserId === member.userId ? '削除中...' : '削除'}
-                    </button>
+                    <div className="member-actions">
+                      {member.status === 'active' ? (
+                        <button
+                          type="button"
+                          className="button compact-button danger-button"
+                          disabled={suspendingUserId === member.userId}
+                          onClick={() => void handleSuspendMember(member.userId, member.name)}
+                        >
+                          {suspendingUserId === member.userId ? '停止中...' : '停止'}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="button compact-button danger-button"
+                        disabled={removingUserId === member.userId}
+                        onClick={() => void handleRemoveMember(member.userId, member.name)}
+                      >
+                        {removingUserId === member.userId ? '削除中...' : '削除'}
+                      </button>
+                    </div>
                   ) : null}
                 </div>
               </li>

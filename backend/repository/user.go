@@ -10,13 +10,16 @@ import (
 
 	"github.com/koezuka404/notehub/entity"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type UserRepository interface {
 	Create(ctx context.Context, user *entity.User) error
 	FindByID(ctx context.Context, id uuid.UUID) (*entity.User, bool, error)
+	FindByIDForUpdate(ctx context.Context, id uuid.UUID) (*entity.User, bool, error)
 	FindByEmail(ctx context.Context, email string) (*entity.User, bool, error)
 	ExistsByEmail(ctx context.Context, email string) (bool, error)
+	Update(ctx context.Context, user *entity.User) error
 	IncrementAuthVersion(ctx context.Context, userID uuid.UUID, now time.Time) error
 }
 
@@ -73,6 +76,25 @@ func (r *userRepository) FindByID(ctx context.Context, id uuid.UUID) (*entity.Us
 		return nil, false, fmt.Errorf("select user by id: %w", err)
 	}
 	return &user, true, nil
+}
+
+func (r *userRepository) FindByIDForUpdate(ctx context.Context, id uuid.UUID) (*entity.User, bool, error) {
+	var user entity.User
+	err := dbFromContext(ctx, r.db).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", id).First(&user).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, fmt.Errorf("select user by id for update: %w", err)
+	}
+	return &user, true, nil
+}
+
+func (r *userRepository) Update(ctx context.Context, user *entity.User) error {
+	if err := dbFromContext(ctx, r.db).Save(user).Error; err != nil {
+		return fmt.Errorf("update user: %w", err)
+	}
+	return nil
 }
 
 func (r *userRepository) IncrementAuthVersion(ctx context.Context, userID uuid.UUID, now time.Time) error {

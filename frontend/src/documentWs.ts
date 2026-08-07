@@ -23,6 +23,7 @@ type DocumentWsHandlers = {
   onRestored?: (content: string) => void;
   onDeleted?: () => void;
   onWorkspaceDeleted?: () => void;
+  onAccountSuspended?: () => void;
 };
 
 function wsBaseUrl(): string {
@@ -127,6 +128,9 @@ export function connectDocumentWebSocket(
         break;
       case 'workspace_deleted':
         handlers.onWorkspaceDeleted?.();
+        break;
+      case 'account_suspended':
+        handlers.onAccountSuspended?.();
         break;
       case 'error': {
         const code = String(envelope.data.code ?? '');

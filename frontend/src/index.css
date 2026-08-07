@@ -431,6 +431,12 @@ body {
   background: #fff;
 }
 
+.member-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .danger-button {
   background: #fff;
   border: 1px solid #fca5a5;

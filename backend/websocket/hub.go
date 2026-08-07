@@ -121,3 +121,28 @@ func (h *Hub) DisconnectWorkspace(workspaceID uuid.UUID, payload []byte) {
 		client.Close()
 	}
 }
+
+func (h *Hub) DisconnectUser(userID uuid.UUID, payload []byte) {
+	h.mu.Lock()
+	targets := make([]*Client, 0)
+	for documentID, clients := range h.documents {
+		for client := range clients {
+			if client.UserID != userID || !client.Ready.Load() {
+				continue
+			}
+			targets = append(targets, client)
+			delete(clients, client)
+		}
+		if len(clients) == 0 {
+			delete(h.documents, documentID)
+		}
+	}
+	h.mu.Unlock()
+
+	for _, client := range targets {
+		if payload != nil {
+			client.TrySend(payload)
+		}
+		client.Close()
+	}
+}
