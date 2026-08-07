@@ -114,8 +114,23 @@ export default function DocumentEditorPage() {
         setConnected(false);
         void navigate('/workspaces', { replace: true });
       },
+      onWorkspaceHostSuspended: () => {
+        setWsError('ホストが停止されているため、このワークスペースは利用できません');
+        setConnected(false);
+        void navigate('/workspaces', { replace: true });
+      },
+      onWorkspaceHostDeleted: () => {
+        setWsError('ホストが削除されているため、このワークスペースは利用できません');
+        setConnected(false);
+        void navigate('/workspaces', { replace: true });
+      },
       onAccountSuspended: () => {
         setWsError('アカウントが停止されました');
+        setConnected(false);
+        void navigate('/login', { replace: true });
+      },
+      onAccountDeleted: () => {
+        setWsError('アカウントが削除されました');
         setConnected(false);
         void navigate('/login', { replace: true });
       },

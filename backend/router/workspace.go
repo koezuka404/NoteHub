@@ -26,6 +26,8 @@ func registerWorkspaceRoutes(
 	workspaces.POST("/:workspaceId/members", member.Add, rateLimit)
 	workspaces.DELETE("/:workspaceId/members/:userId", member.Remove, rateLimit)
 	workspaces.POST("/:workspaceId/members/:userId/suspend", account.Suspend, rateLimit)
+	workspaces.POST("/:workspaceId/members/:userId/reactivate", account.Reactivate, rateLimit)
+	workspaces.POST("/:workspaceId/members/:userId/delete-account", account.Delete, rateLimit)
 
 	workspaces.GET("/:workspaceId/documents", document.List)
 	workspaces.POST("/:workspaceId/documents", document.Create, rateLimit)

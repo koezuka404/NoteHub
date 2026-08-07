@@ -45,6 +45,9 @@ var (
 	ErrCannotSuspendSelf         = errors.New("cannot suspend self")
 	ErrCannotSuspendHost         = errors.New("cannot suspend host")
 	ErrAccountAlreadySuspended   = errors.New("account already suspended")
+	ErrAccountNotSuspended       = errors.New("account not suspended")
+	ErrCannotReactivateSelf      = errors.New("cannot reactivate self")
+	ErrCannotDeleteSelf          = errors.New("cannot delete self")
 
 	ErrDocumentNotFound = errors.New("document not found")
 	ErrDocumentDeleted  = errors.New("document deleted")

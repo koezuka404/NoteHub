@@ -17,13 +17,19 @@ const (
 	EventDocumentDeleted  = "document_deleted"
 	EventWorkspaceDeleted = "workspace_deleted"
 	EventAccountSuspended = "account_suspended"
-	EventError            = "error"
+	EventAccountDeleted         = "account_deleted"
+	EventWorkspaceHostSuspended = "workspace_host_suspended"
+	EventWorkspaceHostDeleted   = "workspace_host_deleted"
+	EventError                  = "error"
 )
 
 const (
-	ReasonDocumentDeleted   = "DOCUMENT_DELETED"
-	ReasonWorkspaceDeleted  = "WORKSPACE_DELETED"
-	ReasonAccountSuspended  = "ACCOUNT_SUSPENDED"
+	ReasonDocumentDeleted         = "DOCUMENT_DELETED"
+	ReasonWorkspaceDeleted        = "WORKSPACE_DELETED"
+	ReasonAccountSuspended        = "ACCOUNT_SUSPENDED"
+	ReasonAccountDeleted          = "ACCOUNT_DELETED"
+	ReasonWorkspaceHostSuspended  = "WORKSPACE_HOST_SUSPENDED"
+	ReasonWorkspaceHostDeleted  = "WORKSPACE_HOST_DELETED"
 )
 
 type Envelope struct {
@@ -98,6 +104,19 @@ type WorkspaceDeletedData struct {
 type AccountSuspendedData struct {
 	UserID      string `json:"user_id"`
 	SuspendedAt string `json:"suspended_at"`
+	Reason      string `json:"reason"`
+}
+
+type AccountDeletedData struct {
+	UserID    string `json:"user_id"`
+	DeletedAt string `json:"deleted_at"`
+	Reason    string `json:"reason"`
+}
+
+type WorkspaceHostLockedData struct {
+	WorkspaceID string `json:"workspace_id"`
+	HostUserID  string `json:"host_user_id"`
+	LockedAt    string `json:"locked_at"`
 	Reason      string `json:"reason"`
 }
 

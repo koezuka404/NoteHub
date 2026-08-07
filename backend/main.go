@@ -145,6 +145,7 @@ func main() {
 		userRepository,
 		refreshTokenRepository,
 		workspaceMemberRepository,
+		workspaceRepository,
 		auditLogRepository,
 		transactionManager,
 		workspaceUseCase,

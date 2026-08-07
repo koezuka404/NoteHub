@@ -2,9 +2,11 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   addMember,
+  deleteAccount,
   getWorkspace,
   listMembers,
   removeMember,
+  reactivateMember,
   searchUser,
   suspendMember,
   type MemberListItem,
@@ -28,6 +30,8 @@ export default function MembersPage() {
   const [adding, setAdding] = useState(false);
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
   const [suspendingUserId, setSuspendingUserId] = useState<string | null>(null);
+  const [reactivatingUserId, setReactivatingUserId] = useState<string | null>(null);
+  const [deletingAccountUserId, setDeletingAccountUserId] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   const isHost = workspace?.role === 'host';
@@ -142,6 +146,48 @@ export default function MembersPage() {
     }
   }
 
+  async function handleReactivateMember(targetUserId: string, targetName: string) {
+    if (!accessToken || !workspaceId) {
+      return;
+    }
+    if (!window.confirm(`${targetName} のアカウントを復帰しますか？\n復帰後は再度ログインが必要です。`)) {
+      return;
+    }
+    setReactivatingUserId(targetUserId);
+    setError('');
+    try {
+      await reactivateMember(accessToken, workspaceId, targetUserId);
+      await loadMembers();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setReactivatingUserId(null);
+    }
+  }
+
+  async function handleDeleteAccount(targetUserId: string, targetName: string) {
+    if (!accessToken || !workspaceId) {
+      return;
+    }
+    if (
+      !window.confirm(
+        `${targetName} のアカウントを論理削除しますか？\nこの操作は取り消せず、二度とログインできなくなります。`,
+      )
+    ) {
+      return;
+    }
+    setDeletingAccountUserId(targetUserId);
+    setError('');
+    try {
+      await deleteAccount(accessToken, workspaceId, targetUserId);
+      await loadMembers();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setDeletingAccountUserId(null);
+    }
+  }
+
   return (
     <AppLayout>
       {error ? <div className="error app-error">{error}</div> : null}
@@ -226,14 +272,36 @@ export default function MembersPage() {
                           {suspendingUserId === member.userId ? '停止中...' : '停止'}
                         </button>
                       ) : null}
-                      <button
-                        type="button"
-                        className="button compact-button danger-button"
-                        disabled={removingUserId === member.userId}
-                        onClick={() => void handleRemoveMember(member.userId, member.name)}
-                      >
-                        {removingUserId === member.userId ? '削除中...' : '削除'}
-                      </button>
+                      {member.status === 'suspended' ? (
+                        <>
+                          <button
+                            type="button"
+                            className="button compact-button"
+                            disabled={reactivatingUserId === member.userId}
+                            onClick={() => void handleReactivateMember(member.userId, member.name)}
+                          >
+                            {reactivatingUserId === member.userId ? '復帰中...' : '復帰'}
+                          </button>
+                          <button
+                            type="button"
+                            className="button compact-button danger-button"
+                            disabled={deletingAccountUserId === member.userId}
+                            onClick={() => void handleDeleteAccount(member.userId, member.name)}
+                          >
+                            {deletingAccountUserId === member.userId ? '削除中...' : 'アカウント削除'}
+                          </button>
+                        </>
+                      ) : null}
+                      {member.status !== 'deleted' ? (
+                        <button
+                          type="button"
+                          className="button compact-button danger-button"
+                          disabled={removingUserId === member.userId}
+                          onClick={() => void handleRemoveMember(member.userId, member.name)}
+                        >
+                          {removingUserId === member.userId ? '削除中...' : 'WSから除外'}
+                        </button>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
@@ -244,7 +312,7 @@ export default function MembersPage() {
         </div>
 
         {!isHost && user ? (
-          <p className="hint-inline">メンバーの追加・削除はホストのみ実行できます。</p>
+          <p className="hint-inline">メンバーの追加・停止・復帰・アカウント削除はホストのみ実行できます。</p>
         ) : null}
       </section>
     </AppLayout>

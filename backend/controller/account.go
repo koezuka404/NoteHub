@@ -42,8 +42,64 @@ func (c *AccountController) Suspend(e echo.Context) error {
 	}})
 }
 
+func (c *AccountController) Reactivate(e echo.Context) error {
+	userID, err := authenticatedUserID(e)
+	if err != nil {
+		return err
+	}
+	workspaceID, err := parseWorkspaceIDParam(e)
+	if err != nil {
+		return err
+	}
+	targetID, err := parseUserIDParam(e)
+	if err != nil {
+		return err
+	}
+	ctx := e.Request().Context()
+	out, err := c.account.ReactivateAccount(ctx, usecase.ReactivateAccountInput{
+		UserID: userID, WorkspaceID: workspaceID, TargetUserID: targetID, IPAddress: e.RealIP(),
+	})
+	if err != nil {
+		return handleAccountUseCaseError(e, err)
+	}
+	return e.JSON(http.StatusOK, dto.Response{Data: dto.ReactivateAccountResponse{
+		UserID: out.UserID.String(), Status: out.Status,
+	}})
+}
+
+func (c *AccountController) Delete(e echo.Context) error {
+	userID, err := authenticatedUserID(e)
+	if err != nil {
+		return err
+	}
+	workspaceID, err := parseWorkspaceIDParam(e)
+	if err != nil {
+		return err
+	}
+	targetID, err := parseUserIDParam(e)
+	if err != nil {
+		return err
+	}
+	ctx := e.Request().Context()
+	out, err := c.account.DeleteAccount(ctx, usecase.DeleteAccountInput{
+		UserID: userID, WorkspaceID: workspaceID, TargetUserID: targetID, IPAddress: e.RealIP(),
+	})
+	if err != nil {
+		return handleAccountUseCaseError(e, err)
+	}
+	return e.JSON(http.StatusOK, dto.Response{Data: dto.DeleteAccountResponse{
+		UserID: out.UserID.String(), Status: out.Status, DeletedAt: out.DeletedAt,
+	}})
+}
+
 func handleAccountUseCaseError(e echo.Context, err error) error {
 	switch {
+	case errors.Is(err, usecase.ErrCannotDeleteSelf):
+		return writeWorkspaceError(e, http.StatusConflict, "CANNOT_DELETE_SELF", "自分自身を削除できません")
+	case errors.Is(err, usecase.ErrCannotReactivateSelf):
+		return writeWorkspaceError(e, http.StatusConflict, "CANNOT_REACTIVATE_SELF", "自分自身を復帰できません")
+	case errors.Is(err, usecase.ErrAccountNotSuspended):
+		return writeWorkspaceError(e, http.StatusConflict, "ACCOUNT_NOT_SUSPENDED", "このアカウントは停止されていません")
 	case errors.Is(err, usecase.ErrCannotSuspendSelf):
 		return writeWorkspaceError(e, http.StatusConflict, "CANNOT_SUSPEND_SELF", "自分自身を停止できません")
 	case errors.Is(err, usecase.ErrCannotSuspendHost):

@@ -221,6 +221,22 @@ export function suspendMember(accessToken: string, workspaceId: string, userId: 
   );
 }
 
+export function reactivateMember(accessToken: string, workspaceId: string, userId: string) {
+  return api<{ userId: string; status: string }>(
+    `/api/workspaces/${workspaceId}/members/${userId}/reactivate`,
+    { method: 'POST' },
+    accessToken,
+  );
+}
+
+export function deleteAccount(accessToken: string, workspaceId: string, userId: string) {
+  return api<{ userId: string; status: string; deletedAt: string }>(
+    `/api/workspaces/${workspaceId}/members/${userId}/delete-account`,
+    { method: 'POST' },
+    accessToken,
+  );
+}
+
 export function validatePassword(password: string): string | null {
   if (password.length < 8 || password.length > 15) {
     return 'パスワードは8文字以上15文字以下で入力してください';

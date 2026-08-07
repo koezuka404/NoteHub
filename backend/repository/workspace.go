@@ -15,6 +15,7 @@ type WorkspaceRepository interface {
 	Create(ctx context.Context, workspace *entity.Workspace) error
 	FindByID(ctx context.Context, workspaceID uuid.UUID) (*entity.Workspace, bool, error)
 	FindByIDForUpdate(ctx context.Context, workspaceID uuid.UUID) (*entity.Workspace, bool, error)
+	FindByHostID(ctx context.Context, hostID uuid.UUID) ([]entity.Workspace, error)
 	FindByUserID(ctx context.Context, userID uuid.UUID) ([]entity.Workspace, error)
 	Update(ctx context.Context, workspace *entity.Workspace) error
 }
