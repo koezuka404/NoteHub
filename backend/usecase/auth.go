@@ -157,6 +157,7 @@ func (uc *AuthUseCase) Login(ctx context.Context, input LoginInput) (*LoginOutpu
 		return nil, fmt.Errorf("%w: check login lock: %v", ErrAuthServiceUnavailable, err)
 	}
 	if locked {
+		uc.recordLoginRateLimitedAudit(ctx, nil, nil, input)
 		return nil, ErrLoginTemporarilyLocked
 	}
 
@@ -166,19 +167,21 @@ func (uc *AuthUseCase) Login(ctx context.Context, input LoginInput) (*LoginOutpu
 	}
 	if !found {
 		_ = uc.auth.ComparePassword(dummyPasswordHash, input.Password)
-		return nil, uc.recordLoginFailure(ctx, email)
+		return nil, uc.handleAuthFailure(ctx, nil, nil, input, email, "invalid_credentials")
 	}
 	if !user.CanAuthenticate() {
-		return nil, uc.recordLoginFailure(ctx, email)
+		userID := user.ID
+		return nil, uc.handleAuthFailure(ctx, &userID, &userID, input, email, "account_unavailable")
 	}
 	if err := uc.auth.ComparePassword(user.PasswordHash, input.Password); err != nil {
-		return nil, uc.recordLoginFailure(ctx, email)
+		userID := user.ID
+		return nil, uc.handleAuthFailure(ctx, &userID, &userID, input, email, "invalid_credentials")
 	}
 	if err := uc.auth.ResetLoginFailures(ctx, email); err != nil {
 		return nil, fmt.Errorf("%w: reset login failures: %v", ErrAuthServiceUnavailable, err)
 	}
 
-	now := uc.now()
+	now := uc.now().UTC()
 	accessToken, expiresAt, err := uc.auth.GenerateAccessToken(user.ID, user.AuthVersion, now)
 	if err != nil {
 		return nil, fmt.Errorf("generate access token: %w", err)
@@ -200,6 +203,9 @@ func (uc *AuthUseCase) Login(ctx context.Context, input LoginInput) (*LoginOutpu
 	if err != nil {
 		return nil, fmt.Errorf("generate csrf token: %w", err)
 	}
+	if err := uc.recordLoginSuccessAudit(ctx, user.ID, input, now); err != nil {
+		return nil, err
+	}
 
 	return &LoginOutput{
 		User:        LoginUserOutput{ID: user.ID, Name: user.Name, Email: user.Email, Status: user.Status},
@@ -207,15 +213,78 @@ func (uc *AuthUseCase) Login(ctx context.Context, input LoginInput) (*LoginOutpu
 	}, nil
 }
 
-func (uc *AuthUseCase) recordLoginFailure(ctx context.Context, email string) error {
+func (uc *AuthUseCase) handleAuthFailure(
+	ctx context.Context,
+	actorUserID *uuid.UUID,
+	resourceUserID *uuid.UUID,
+	input LoginInput,
+	email string,
+	reason string,
+) error {
 	locked, _, err := uc.auth.RecordLoginFailure(ctx, email)
 	if err != nil {
 		return fmt.Errorf("%w: record login failure: %v", ErrAuthServiceUnavailable, err)
 	}
 	if locked {
+		uc.recordLoginRateLimitedAudit(ctx, actorUserID, resourceUserID, input)
 		return ErrLoginTemporarilyLocked
 	}
+	uc.recordLoginFailedAudit(ctx, actorUserID, resourceUserID, input, reason)
 	return ErrInvalidCredentials
+}
+
+func (uc *AuthUseCase) recordLoginSuccessAudit(ctx context.Context, userID uuid.UUID, input LoginInput, now time.Time) error {
+	if uc.auditLogs == nil {
+		return nil
+	}
+	audit, err := entity.NewAuditLog(&userID, "LOGIN", "user", &userID, nil, now)
+	if err != nil {
+		return fmt.Errorf("create login success audit log entity: %w", err)
+	}
+	audit.IPAddress = input.IPAddress
+	audit.UserAgent = input.UserAgent
+	if err := uc.auditLogs.Create(ctx, &audit); err != nil {
+		return fmt.Errorf("save login success audit log: %w", err)
+	}
+	return nil
+}
+
+func (uc *AuthUseCase) recordLoginRateLimitedAudit(
+	ctx context.Context,
+	actorUserID *uuid.UUID,
+	resourceUserID *uuid.UUID,
+	input LoginInput,
+) {
+	if uc.auditLogs == nil {
+		return
+	}
+	audit, err := entity.NewAuditLog(actorUserID, "LOGIN_RATE_LIMITED", "user", resourceUserID, nil, uc.now().UTC())
+	if err != nil {
+		return
+	}
+	audit.IPAddress = input.IPAddress
+	audit.UserAgent = input.UserAgent
+	_ = uc.auditLogs.Create(ctx, &audit)
+}
+
+func (uc *AuthUseCase) recordLoginFailedAudit(
+	ctx context.Context,
+	actorUserID *uuid.UUID,
+	resourceUserID *uuid.UUID,
+	input LoginInput,
+	reason string,
+) {
+	if uc.auditLogs == nil {
+		return
+	}
+	metadata := map[string]string{"reason": reason}
+	audit, err := entity.NewAuditLog(actorUserID, "LOGIN_FAILED", "user", resourceUserID, metadata, uc.now().UTC())
+	if err != nil {
+		return
+	}
+	audit.IPAddress = input.IPAddress
+	audit.UserAgent = input.UserAgent
+	_ = uc.auditLogs.Create(ctx, &audit)
 }
 
 // auth_register.go

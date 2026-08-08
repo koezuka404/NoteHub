@@ -71,9 +71,15 @@ func (m *mockRefreshTokenRepo) DeleteStaleBefore(context.Context, time.Time) (in
 	return 0, nil
 }
 
-type mockAuditLogRepo struct{}
+type mockAuditLogRepo struct {
+	logs []*entity.AuditLog
+}
 
-func (m *mockAuditLogRepo) Create(context.Context, *entity.AuditLog) error { return nil }
+func (m *mockAuditLogRepo) Create(_ context.Context, log *entity.AuditLog) error {
+	copy := *log
+	m.logs = append(m.logs, &copy)
+	return nil
+}
 
 type mockTransactionManager struct{}
 
@@ -122,7 +128,16 @@ func (m *mockAuthService) ResetLoginFailures(context.Context, string) error {
 }
 
 func newLoginAuthUseCase(users *mockUserRepo, refresh *mockRefreshTokenRepo, auth *mockAuthService) *AuthUseCase {
-	uc := NewAuthUseCase(users, refresh, &mockAuditLogRepo{}, auth, &mockTransactionManager{}, 24*time.Hour)
+	return newLoginAuthUseCaseWithAudit(users, refresh, auth, &mockAuditLogRepo{})
+}
+
+func newLoginAuthUseCaseWithAudit(
+	users *mockUserRepo,
+	refresh *mockRefreshTokenRepo,
+	auth *mockAuthService,
+	audit *mockAuditLogRepo,
+) *AuthUseCase {
+	uc := NewAuthUseCase(users, refresh, audit, auth, &mockTransactionManager{}, 24*time.Hour)
 	uc.now = func() time.Time {
 		return time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
 	}
@@ -140,11 +155,15 @@ func TestLogin_ValidationError(t *testing.T) {
 
 func TestLogin_AccountLocked(t *testing.T) {
 	auth := &mockAuthService{loginLocked: true}
-	uc := newLoginAuthUseCase(&mockUserRepo{}, &mockRefreshTokenRepo{}, auth)
+	auditRepo := &mockAuditLogRepo{}
+	uc := newLoginAuthUseCaseWithAudit(&mockUserRepo{}, &mockRefreshTokenRepo{}, auth, auditRepo)
 
 	_, err := uc.Login(context.Background(), LoginInput{Email: "user@example.com", Password: "secret"})
 	if !errors.Is(err, ErrLoginTemporarilyLocked) {
 		t.Fatalf("expected ErrLoginTemporarilyLocked, got %v", err)
+	}
+	if len(auditRepo.logs) != 1 || auditRepo.logs[0].Action != "LOGIN_RATE_LIMITED" {
+		t.Fatalf("expected LOGIN_RATE_LIMITED audit log, got %+v", auditRepo.logs)
 	}
 }
 
@@ -247,5 +266,116 @@ func TestLogin_Success(t *testing.T) {
 	}
 	if refreshRepo.created.IPAddress != "127.0.0.1" || refreshRepo.created.UserAgent != "test-agent" {
 		t.Fatalf("unexpected refresh metadata: %+v", refreshRepo.created)
+	}
+}
+
+func TestLogin_Success_RecordsAuditLog(t *testing.T) {
+	userID := uuid.New()
+	user := &entity.User{
+		ID:           userID,
+		Name:         "Alice",
+		Email:        "user@example.com",
+		PasswordHash: "stored-hash",
+		Status:       entity.UserStatusActive,
+		AuthVersion:  2,
+	}
+	auditRepo := &mockAuditLogRepo{}
+	uc := newLoginAuthUseCaseWithAudit(
+		&mockUserRepo{user: user, found: true},
+		&mockRefreshTokenRepo{},
+		&mockAuthService{},
+		auditRepo,
+	)
+
+	_, err := uc.Login(context.Background(), LoginInput{
+		Email:     "user@example.com",
+		Password:  "Pass1234",
+		IPAddress: "127.0.0.1",
+		UserAgent: "test-agent",
+	})
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	if len(auditRepo.logs) != 1 {
+		t.Fatalf("expected 1 audit log, got %d", len(auditRepo.logs))
+	}
+	log := auditRepo.logs[0]
+	if log.Action != "LOGIN" || log.ResourceType != "user" {
+		t.Fatalf("unexpected audit log: %+v", log)
+	}
+	if log.ActorUserID == nil || *log.ActorUserID != userID {
+		t.Fatalf("unexpected actor: %+v", log.ActorUserID)
+	}
+	if log.ResourceID == nil || *log.ResourceID != userID {
+		t.Fatalf("unexpected resource id: %+v", log.ResourceID)
+	}
+	if log.IPAddress != "127.0.0.1" || log.UserAgent != "test-agent" {
+		t.Fatalf("unexpected audit metadata: %+v", log)
+	}
+}
+
+func TestLogin_WrongPassword_RecordsFailedAuditLog(t *testing.T) {
+	userID := uuid.New()
+	user := &entity.User{
+		ID:           userID,
+		Email:        "user@example.com",
+		PasswordHash: "stored-hash",
+		Status:       entity.UserStatusActive,
+	}
+	auditRepo := &mockAuditLogRepo{}
+	uc := newLoginAuthUseCaseWithAudit(
+		&mockUserRepo{user: user, found: true},
+		&mockRefreshTokenRepo{},
+		&mockAuthService{compareErr: fmt.Errorf("password mismatch")},
+		auditRepo,
+	)
+
+	_, err := uc.Login(context.Background(), LoginInput{
+		Email:     "user@example.com",
+		Password:  "wrong",
+		IPAddress: "127.0.0.1",
+		UserAgent: "test-agent",
+	})
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("expected ErrInvalidCredentials, got %v", err)
+	}
+	if len(auditRepo.logs) != 1 {
+		t.Fatalf("expected 1 audit log, got %d", len(auditRepo.logs))
+	}
+	log := auditRepo.logs[0]
+	if log.Action != "LOGIN_FAILED" {
+		t.Fatalf("unexpected action: %q", log.Action)
+	}
+	if log.ActorUserID == nil || *log.ActorUserID != userID {
+		t.Fatalf("unexpected actor: %+v", log.ActorUserID)
+	}
+}
+
+func TestLogin_UserNotFound_RecordsFailedAuditLog(t *testing.T) {
+	auditRepo := &mockAuditLogRepo{}
+	uc := newLoginAuthUseCaseWithAudit(
+		&mockUserRepo{found: false},
+		&mockRefreshTokenRepo{},
+		&mockAuthService{},
+		auditRepo,
+	)
+
+	_, err := uc.Login(context.Background(), LoginInput{
+		Email:     "missing@example.com",
+		Password:  "secret",
+		IPAddress: "127.0.0.1",
+	})
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("expected ErrInvalidCredentials, got %v", err)
+	}
+	if len(auditRepo.logs) != 1 {
+		t.Fatalf("expected 1 audit log, got %d", len(auditRepo.logs))
+	}
+	log := auditRepo.logs[0]
+	if log.Action != "LOGIN_FAILED" {
+		t.Fatalf("unexpected action: %q", log.Action)
+	}
+	if log.ActorUserID != nil || log.ResourceID != nil {
+		t.Fatalf("expected nil actor/resource for unknown user, got actor=%+v resource=%+v", log.ActorUserID, log.ResourceID)
 	}
 }
