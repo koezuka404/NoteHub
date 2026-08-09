@@ -5,6 +5,12 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND_URL="${BACKEND_URL:-http://localhost:8082}"
 COMPOSE="${COMPOSE:-docker compose}"
 RUN_INTEGRATION="${RUN_INTEGRATION:-1}"
+INTEGRATION_ONLY="${INTEGRATION_ONLY:-0}"
+USE_COMPOSE_SERVICES="${USE_COMPOSE_SERVICES:-1}"
+POSTGRES_HOST="${POSTGRES_HOST:-localhost}"
+POSTGRES_PORT="${POSTGRES_PORT:-5436}"
+REDIS_HOST="${REDIS_HOST:-localhost}"
+REDIS_PORT="${REDIS_PORT:-6382}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -18,13 +24,21 @@ info() { echo -e "${YELLOW}→${NC} $1"; }
 echo "=== NoteHub 全体テスト ==="
 echo
 
-info "1/3 Backend unit tests"
+if [[ "$INTEGRATION_ONLY" == "1" ]]; then
+  info "Skipping unit/build steps (INTEGRATION_ONLY=1)"
+else
+info "1/4 Backend unit tests"
 (cd "$ROOT_DIR/backend" && go test ./... -count=1)
 pass "Backend unit tests"
 
-info "2/3 Frontend build (typecheck + vite build)"
+info "2/4 Frontend unit tests (Vitest)"
+(cd "$ROOT_DIR/frontend" && npm test)
+pass "Frontend unit tests"
+
+info "3/4 Frontend build (typecheck + vite build)"
 (cd "$ROOT_DIR/frontend" && npm run build)
 pass "Frontend build"
+fi
 
 if [[ "$RUN_INTEGRATION" != "1" ]]; then
   info "Integration tests skipped (RUN_INTEGRATION=0)"
@@ -33,9 +47,12 @@ if [[ "$RUN_INTEGRATION" != "1" ]]; then
   exit 0
 fi
 
-info "3/3 Integration smoke tests (Postgres/Redis in Docker, backend local)"
+info "4/4 Integration smoke tests (Postgres/Redis + backend local)"
 cd "$ROOT_DIR"
-$COMPOSE up -d postgres redis
+
+if [[ "$USE_COMPOSE_SERVICES" == "1" ]]; then
+  $COMPOSE up -d postgres redis
+fi
 
 wait_for_tcp() {
   local host="$1"
@@ -50,8 +67,8 @@ wait_for_tcp() {
   return 1
 }
 
-wait_for_tcp localhost 5436 || fail "Postgres did not become ready on localhost:5436"
-wait_for_tcp localhost 6382 || fail "Redis did not become ready on localhost:6382"
+wait_for_tcp "$POSTGRES_HOST" "$POSTGRES_PORT" || fail "Postgres did not become ready on ${POSTGRES_HOST}:${POSTGRES_PORT}"
+wait_for_tcp "$REDIS_HOST" "$REDIS_PORT" || fail "Redis did not become ready on ${REDIS_HOST}:${REDIS_PORT}"
 pass "Postgres/Redis ready"
 
 BACKEND_PID=""
@@ -66,14 +83,20 @@ cleanup() {
 trap cleanup EXIT
 
 set -a
-# shellcheck disable=SC1091
-source "$ROOT_DIR/.env"
+if [[ -f "$ROOT_DIR/.env" ]]; then
+  # shellcheck disable=SC1091
+  source "$ROOT_DIR/.env"
+fi
+export JWT_SECRET="${JWT_SECRET:-notehub-ci-secret-key-32bytes-minimum}"
+export JWT_ISSUER="${JWT_ISSUER:-notehub-api}"
+export JWT_AUDIENCE="${JWT_AUDIENCE:-notehub-client}"
+export APP_ENV="${APP_ENV:-test}"
 set +a
 
 (
   cd "$ROOT_DIR/backend"
-  export DATABASE_URL="${DATABASE_URL:-postgres://notehub:notehub@localhost:5436/notehub?sslmode=disable}"
-  export REDIS_URL="${REDIS_URL:-redis://localhost:6382/0}"
+  export DATABASE_URL="${DATABASE_URL:-postgres://notehub:notehub@${POSTGRES_HOST}:${POSTGRES_PORT}/notehub?sslmode=disable}"
+  export REDIS_URL="${REDIS_URL:-redis://${REDIS_HOST}:${REDIS_PORT}/0}"
   export HTTP_PORT=8082
   export PUBLIC_HTTP_URL="$BACKEND_URL"
   go run . >"$BACKEND_LOG" 2>&1

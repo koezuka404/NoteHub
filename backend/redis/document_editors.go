@@ -51,11 +51,11 @@ func (s *DocumentEditorsStore) Add(ctx context.Context, documentID uuid.UUID, ed
 	if err != nil {
 		return false, nil, fmt.Errorf("add document editor: %w", err)
 	}
-	if err := s.client.Expire(ctx, key, s.keyTTL).Err(); err != nil {
+	if err := expireEditorsKeyFn(s.client, ctx, key, s.keyTTL); err != nil {
 		return false, nil, fmt.Errorf("refresh document editors ttl: %w", err)
 	}
 
-	editors, err := s.List(ctx, documentID)
+	editors, err := listDocumentEditorsFn(s, ctx, documentID)
 	if err != nil {
 		return false, nil, err
 	}
@@ -72,24 +72,24 @@ func (s *DocumentEditorsStore) Remove(ctx context.Context, documentID, userID uu
 		return false, nil, fmt.Errorf("remove document editor: %w", err)
 	}
 	if removed == 0 {
-		editors, err := s.List(ctx, documentID)
+		editors, err := listDocumentEditorsFn(s, ctx, documentID)
 		return false, editors, err
 	}
 
-	remaining, err := s.client.HLen(ctx, key).Result()
+	remaining, err := countEditorHashFieldsFn(s.client, ctx, key)
 	if err != nil {
 		return false, nil, fmt.Errorf("count document editors: %w", err)
 	}
 	if remaining == 0 {
-		if err := s.client.Del(ctx, key).Err(); err != nil {
+		if err := deleteEditorsKeyFn(s.client, ctx, key); err != nil {
 			return false, nil, fmt.Errorf("clear document editors: %w", err)
 		}
 		return true, nil, nil
 	}
-	if err := s.client.Expire(ctx, key, s.keyTTL).Err(); err != nil {
+	if err := expireEditorsKeyFn(s.client, ctx, key, s.keyTTL); err != nil {
 		return false, nil, fmt.Errorf("refresh document editors ttl: %w", err)
 	}
-	editors, err := s.List(ctx, documentID)
+	editors, err := listDocumentEditorsFn(s, ctx, documentID)
 	if err != nil {
 		return true, nil, err
 	}
@@ -108,7 +108,7 @@ func (s *DocumentEditorsStore) RefreshTTL(ctx context.Context, documentID uuid.U
 	if n == 0 {
 		return nil
 	}
-	if err := s.client.Expire(ctx, key, s.keyTTL).Err(); err != nil {
+	if err := expireEditorsKeyFn(s.client, ctx, key, s.keyTTL); err != nil {
 		return fmt.Errorf("refresh document editors ttl: %w", err)
 	}
 	return nil

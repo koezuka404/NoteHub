@@ -96,7 +96,7 @@ type mockAuthService struct {
 	recordFailCalled bool
 }
 
-func (m *mockAuthService) HashPassword(string) (string, error) { return "", nil }
+func (m *mockAuthService) HashPassword(string) (string, error) { return "hashed-password", nil }
 func (m *mockAuthService) ComparePassword(_, _ string) error {
 	m.compareCalls++
 	return m.compareErr
@@ -127,14 +127,14 @@ func (m *mockAuthService) ResetLoginFailures(context.Context, string) error {
 	return nil
 }
 
-func newLoginAuthUseCase(users *mockUserRepo, refresh *mockRefreshTokenRepo, auth *mockAuthService) *AuthUseCase {
+func newLoginAuthUseCase(users *mockUserRepo, refresh *mockRefreshTokenRepo, auth IAuthService) *AuthUseCase {
 	return newLoginAuthUseCaseWithAudit(users, refresh, auth, &mockAuditLogRepo{})
 }
 
 func newLoginAuthUseCaseWithAudit(
 	users *mockUserRepo,
 	refresh *mockRefreshTokenRepo,
-	auth *mockAuthService,
+	auth IAuthService,
 	audit *mockAuditLogRepo,
 ) *AuthUseCase {
 	uc := NewAuthUseCase(users, refresh, audit, auth, &mockTransactionManager{}, 24*time.Hour)
@@ -303,8 +303,8 @@ func TestLogin_Success_RecordsAuditLog(t *testing.T) {
 	if log.Action != "LOGIN" || log.ResourceType != "user" {
 		t.Fatalf("unexpected audit log: %+v", log)
 	}
-	if log.ActorUserID == nil || *log.ActorUserID != userID {
-		t.Fatalf("unexpected actor: %+v", log.ActorUserID)
+	if log.UserID == nil || *log.UserID != userID {
+		t.Fatalf("unexpected actor: %+v", log.UserID)
 	}
 	if log.ResourceID == nil || *log.ResourceID != userID {
 		t.Fatalf("unexpected resource id: %+v", log.ResourceID)
@@ -346,8 +346,8 @@ func TestLogin_WrongPassword_RecordsFailedAuditLog(t *testing.T) {
 	if log.Action != "LOGIN_FAILED" {
 		t.Fatalf("unexpected action: %q", log.Action)
 	}
-	if log.ActorUserID == nil || *log.ActorUserID != userID {
-		t.Fatalf("unexpected actor: %+v", log.ActorUserID)
+	if log.UserID == nil || *log.UserID != userID {
+		t.Fatalf("unexpected actor: %+v", log.UserID)
 	}
 }
 
@@ -375,7 +375,7 @@ func TestLogin_UserNotFound_RecordsFailedAuditLog(t *testing.T) {
 	if log.Action != "LOGIN_FAILED" {
 		t.Fatalf("unexpected action: %q", log.Action)
 	}
-	if log.ActorUserID != nil || log.ResourceID != nil {
-		t.Fatalf("expected nil actor/resource for unknown user, got actor=%+v resource=%+v", log.ActorUserID, log.ResourceID)
+	if log.UserID != nil || log.ResourceID != nil {
+		t.Fatalf("expected nil actor/resource for unknown user, got actor=%+v resource=%+v", log.UserID, log.ResourceID)
 	}
 }

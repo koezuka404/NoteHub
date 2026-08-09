@@ -7,4 +7,5 @@ import (
 
 func registerWebSocketRoutes(e *echo.Echo, ws *controller.WebSocketController) {
 	e.GET("/ws/documents/:documentId", ws.HandleDocument)
+	e.GET("/ws/workspaces/:workspaceId", ws.HandleWorkspace)
 }

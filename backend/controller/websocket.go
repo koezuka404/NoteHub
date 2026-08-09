@@ -19,6 +19,13 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+var (
+	wsUpgrader = func(checkOrigin func(*http.Request) bool) *gorillaws.Upgrader {
+		return &gorillaws.Upgrader{CheckOrigin: checkOrigin}
+	}
+	wsMarshalEvent = appws.MarshalEvent
+)
+
 type WebSocketController struct {
 	wsUseCase      usecase.IDocumentWebSocketUsecase
 	tokens         appmiddleware.IAccessTokenValidator
@@ -81,12 +88,12 @@ func (c *WebSocketController) HandleDocument(e echo.Context) error {
 
 	documentID, err := parseDocumentIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 
 	userID, err := c.authenticate(e)
 	if err != nil {
-		return err
+		return nil
 	}
 
 	ctx := e.Request().Context()
@@ -105,10 +112,7 @@ func (c *WebSocketController) HandleDocument(e echo.Context) error {
 		return handleWebSocketUseCaseError(e, err)
 	}
 
-	upgrader := gorillaws.Upgrader{
-		CheckOrigin: c.checkOrigin,
-	}
-	conn, err := upgrader.Upgrade(e.Response(), e.Request(), nil)
+	conn, err := wsUpgrader(c.checkOrigin).Upgrade(e.Response(), e.Request(), nil)
 	if err != nil {
 		unregCtx, cancel := c.backgroundContext()
 		_, _ = c.wsUseCase.UnregisterConnection(unregCtx, usecase.UnregisterWebSocketConnectionInput{
@@ -135,6 +139,53 @@ func (c *WebSocketController) HandleDocument(e echo.Context) error {
 	return nil
 }
 
+func (c *WebSocketController) HandleWorkspace(e echo.Context) error {
+	if c.production && e.Scheme() != "https" && e.Request().TLS == nil {
+		return writeWebSocketHTTPError(e, http.StatusForbidden, "WEBSOCKET_TLS_REQUIRED", "WSS接続が必要です")
+	}
+
+	workspaceID, err := parseWorkspaceIDParam(e)
+	if err != nil {
+		return nil
+	}
+
+	userID, err := c.authenticate(e)
+	if err != nil {
+		return nil
+	}
+
+	ctx := e.Request().Context()
+	if err := c.wsUseCase.PrepareWorkspaceConnection(ctx, usecase.PrepareWorkspaceConnectionInput{
+		UserID: userID, WorkspaceID: workspaceID,
+	}); err != nil {
+		return handleWebSocketUseCaseError(e, err)
+	}
+
+	conn, err := wsUpgrader(c.checkOrigin).Upgrade(e.Response(), e.Request(), nil)
+	if err != nil {
+		return err
+	}
+
+	connectionID := uuid.New()
+	client := &appws.Client{
+		ConnectionID: connectionID,
+		UserID:       userID,
+		WorkspaceID:  workspaceID,
+		Hub:          c.hub,
+		Conn:         conn,
+		Send:         make(chan []byte, 16),
+	}
+	go client.WritePump()
+	c.sendEvent(client, appws.EventConnected, appws.ConnectedData{
+		ConnectionID: connectionID.String(),
+		WorkspaceID:  workspaceID.String(),
+	}, c.now())
+	client.Ready.Store(true)
+	c.hub.Register(client)
+	go client.ReadPump(func(*appws.Client, []byte) {}, nil)
+	return nil
+}
+
 func (c *WebSocketController) authenticate(e echo.Context) (uuid.UUID, error) {
 	rawToken := strings.TrimSpace(e.QueryParam("access_token"))
 	if rawToken == "" {
@@ -145,35 +196,43 @@ func (c *WebSocketController) authenticate(e echo.Context) (uuid.UUID, error) {
 		}
 	}
 	if rawToken == "" {
-		return uuid.Nil, writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_REQUIRED", "アクセストークンが必要です")
+		_ = writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_REQUIRED", "アクセストークンが必要です")
+		return uuid.Nil, errResponseSent
 	}
 
 	claims, err := c.tokens.ValidateAccessToken(rawToken, c.now().UTC())
 	if err != nil {
 		if errors.Is(err, jwt.ErrTokenExpired) {
-			return uuid.Nil, writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_EXPIRED", "アクセストークンの有効期限が切れています")
+			_ = writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_EXPIRED", "アクセストークンの有効期限が切れています")
+			return uuid.Nil, errResponseSent
 		}
-		return uuid.Nil, writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+		_ = writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+		return uuid.Nil, errResponseSent
 	}
 
 	ctx := e.Request().Context()
 	isRevoked, err := c.revoked.IsRevoked(ctx, claims.JTI)
 	if err != nil {
-		return uuid.Nil, writeWebSocketHTTPError(e, http.StatusServiceUnavailable, "AUTH_SERVICE_UNAVAILABLE", "認証サービスを利用できません")
+		_ = writeWebSocketHTTPError(e, http.StatusServiceUnavailable, "AUTH_SERVICE_UNAVAILABLE", "認証サービスを利用できません")
+		return uuid.Nil, errResponseSent
 	}
 	if isRevoked {
-		return uuid.Nil, writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_REVOKED", "アクセストークンは失効しています")
+		_ = writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_REVOKED", "アクセストークンは失効しています")
+		return uuid.Nil, errResponseSent
 	}
 
 	user, found, err := c.users.FindByID(ctx, claims.UserID)
 	if err != nil {
-		return uuid.Nil, writeWebSocketHTTPError(e, http.StatusInternalServerError, "DATABASE_ERROR", "データベース処理に失敗しました")
+		_ = writeWebSocketHTTPError(e, http.StatusInternalServerError, "DATABASE_ERROR", "データベース処理に失敗しました")
+		return uuid.Nil, errResponseSent
 	}
 	if !found || !user.CanAuthenticate() {
-		return uuid.Nil, writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+		_ = writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+		return uuid.Nil, errResponseSent
 	}
 	if user.AuthVersion != claims.AuthVersion {
-		return uuid.Nil, writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_REVOKED", "アクセストークンは失効しています")
+		_ = writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_REVOKED", "アクセストークンは失効しています")
+		return uuid.Nil, errResponseSent
 	}
 	return claims.UserID, nil
 }
@@ -205,7 +264,7 @@ func (c *WebSocketController) sendInitialEvents(client *appws.Client, prepared *
 		Editors: toEditorEventData(registered.Editors),
 	}, now)
 	if registered.EditorJoined {
-		payload, err := appws.MarshalEvent(appws.EventEditorJoined, appws.EditorEventData{
+		payload, err := wsMarshalEvent(appws.EventEditorJoined, appws.EditorEventData{
 			UserID: registered.JoinedEditor.UserID.String(),
 			Name:   registered.JoinedEditor.Name,
 		}, now)
@@ -238,7 +297,7 @@ func (c *WebSocketController) handleClientMessage(client *appws.Client, raw []by
 			c.sendUseCaseError(client, err)
 			return
 		}
-		payload, err := appws.MarshalEvent(appws.EventDocumentUpdated, appws.DocumentUpdatedData{
+		payload, err := wsMarshalEvent(appws.EventDocumentUpdated, appws.DocumentUpdatedData{
 			DocumentID: out.DocumentID.String(),
 			Content:    out.Content,
 			UpdatedBy:  out.UpdatedBy.String(),
@@ -266,7 +325,7 @@ func (c *WebSocketController) cleanupClient(client *appws.Client) {
 	}
 	now := c.now()
 	if out.EditorLeft {
-		payload, err := appws.MarshalEvent(appws.EventEditorLeft, appws.EditorEventData{
+		payload, err := wsMarshalEvent(appws.EventEditorLeft, appws.EditorEventData{
 			UserID: out.LeftEditor.UserID.String(),
 			Name:   out.LeftEditor.Name,
 		}, now)
@@ -277,7 +336,7 @@ func (c *WebSocketController) cleanupClient(client *appws.Client) {
 }
 
 func (c *WebSocketController) sendEvent(client *appws.Client, eventType string, data any, now time.Time) {
-	payload, err := appws.MarshalEvent(eventType, data, now)
+	payload, err := wsMarshalEvent(eventType, data, now)
 	if err != nil {
 		return
 	}

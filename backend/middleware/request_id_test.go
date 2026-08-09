@@ -63,3 +63,48 @@ func TestNormalizeRequestID_RejectsInvalidCharacters(t *testing.T) {
 		t.Fatalf("normalizeRequestID() = %q, want empty", got)
 	}
 }
+
+func TestNormalizeRequestID_AcceptsValidValue(t *testing.T) {
+	if got := normalizeRequestID("  req-123_test  "); got != "req-123_test" {
+		t.Fatalf("normalizeRequestID() = %q", got)
+	}
+}
+
+func TestNormalizeRequestID_RejectsEmptyAndTooLong(t *testing.T) {
+	if got := normalizeRequestID("   "); got != "" {
+		t.Fatalf("normalizeRequestID() = %q, want empty", got)
+	}
+	long := make([]byte, maxRequestIDLength+1)
+	for i := range long {
+		long[i] = 'a'
+	}
+	if got := normalizeRequestID(string(long)); got != "" {
+		t.Fatalf("normalizeRequestID() = %q, want empty", got)
+	}
+}
+
+func TestRequestIDMiddleware_GeneratesWhenMissing(t *testing.T) {
+	e := echo.New()
+	e.Use(NewRequestIDMiddleware())
+	e.GET("/health", func(ctx echo.Context) error {
+		if RequestID(ctx) == "" {
+			t.Fatal("expected generated request id in context")
+		}
+		return ctx.NoContent(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get(RequestIDHeader); got == "" {
+		t.Fatal("expected response request id header")
+	}
+}
+
+func TestRequestID_EmptyWhenUnset(t *testing.T) {
+	ctx := newEchoContext(t)
+	if got := RequestID(ctx); got != "" {
+		t.Fatalf("RequestID() = %q, want empty", got)
+	}
+}

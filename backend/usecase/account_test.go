@@ -43,8 +43,10 @@ func (m *mockMemberRepo) Exists(context.Context, uuid.UUID, uuid.UUID) (bool, er
 func (m *mockMemberRepo) Delete(context.Context, uuid.UUID, uuid.UUID) error { return nil }
 
 type mockAccountUserRepo struct {
-	users   map[uuid.UUID]*entity.User
-	updated *entity.User
+	users            map[uuid.UUID]*entity.User
+	updated          *entity.User
+	updateErr        error
+	findForUpdateErr error
 }
 
 func (m *mockAccountUserRepo) Create(context.Context, *entity.User) error { return nil }
@@ -52,6 +54,9 @@ func (m *mockAccountUserRepo) FindByID(context.Context, uuid.UUID) (*entity.User
 	return nil, false, nil
 }
 func (m *mockAccountUserRepo) FindByIDForUpdate(_ context.Context, id uuid.UUID) (*entity.User, bool, error) {
+	if m.findForUpdateErr != nil {
+		return nil, false, m.findForUpdateErr
+	}
 	user, ok := m.users[id]
 	if !ok {
 		return nil, false, nil
@@ -64,6 +69,9 @@ func (m *mockAccountUserRepo) FindByEmail(context.Context, string) (*entity.User
 }
 func (m *mockAccountUserRepo) ExistsByEmail(context.Context, string) (bool, error) { return false, nil }
 func (m *mockAccountUserRepo) Update(_ context.Context, user *entity.User) error {
+	if m.updateErr != nil {
+		return m.updateErr
+	}
 	m.updated = user
 	if m.users != nil {
 		copy := *user

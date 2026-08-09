@@ -138,7 +138,7 @@ func (uc *AccountUseCase) SuspendAccount(ctx context.Context, input SuspendAccou
 		if target.IsDeleted() {
 			return ErrAccountDeleted
 		}
-		if err := target.Suspend(now); err != nil {
+		if err := suspendUserFn(target, now); err != nil {
 			if errors.Is(err, entity.ErrInvalidStateTransition) {
 				return ErrAccountAlreadySuspended
 			}
@@ -151,7 +151,7 @@ func (uc *AccountUseCase) SuspendAccount(ctx context.Context, input SuspendAccou
 			return fmt.Errorf("revoke refresh tokens: %w", err)
 		}
 
-		audit, err := entity.NewAuditLog(&input.UserID, "ACCOUNT_SUSPENDED", "user", &target.ID, nil, now)
+		audit, err := newAuditLogFn(&input.UserID, "ACCOUNT_SUSPENDED", "user", &target.ID, nil, now)
 		if err != nil {
 			return fmt.Errorf("create audit log entity: %w", err)
 		}
@@ -224,7 +224,7 @@ func (uc *AccountUseCase) ReactivateAccount(ctx context.Context, input Reactivat
 		if target.IsDeleted() {
 			return ErrAccountDeleted
 		}
-		if err := target.Reactivate(now); err != nil {
+		if err := reactivateUserFn(target, now); err != nil {
 			if errors.Is(err, entity.ErrUserNotSuspended) {
 				return ErrAccountNotSuspended
 			}
@@ -234,7 +234,7 @@ func (uc *AccountUseCase) ReactivateAccount(ctx context.Context, input Reactivat
 			return fmt.Errorf("update reactivated user: %w", err)
 		}
 
-		audit, err := entity.NewAuditLog(&input.UserID, "ACCOUNT_REACTIVATED", "user", &target.ID, nil, now)
+		audit, err := newAuditLogFn(&input.UserID, "ACCOUNT_REACTIVATED", "user", &target.ID, nil, now)
 		if err != nil {
 			return fmt.Errorf("create audit log entity: %w", err)
 		}
@@ -300,7 +300,7 @@ func (uc *AccountUseCase) DeleteAccount(ctx context.Context, input DeleteAccount
 		if target.IsDeleted() {
 			return ErrAccountDeleted
 		}
-		if err := target.LogicalDelete(deletedUserEmail(target.ID), deletedAccountPasswordHash, now); err != nil {
+		if err := logicalDeleteUserFn(target, deletedUserEmail(target.ID), deletedAccountPasswordHash, now); err != nil {
 			if errors.Is(err, entity.ErrUserNotSuspended) {
 				return ErrAccountNotSuspended
 			}
@@ -313,7 +313,7 @@ func (uc *AccountUseCase) DeleteAccount(ctx context.Context, input DeleteAccount
 			return fmt.Errorf("revoke refresh tokens: %w", err)
 		}
 
-		audit, err := entity.NewAuditLog(&input.UserID, "ACCOUNT_DELETED", "user", &target.ID, nil, now)
+		audit, err := newAuditLogFn(&input.UserID, "ACCOUNT_DELETED", "user", &target.ID, nil, now)
 		if err != nil {
 			return fmt.Errorf("create audit log entity: %w", err)
 		}

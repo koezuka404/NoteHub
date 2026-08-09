@@ -105,12 +105,17 @@ export default function DocumentEditorPage() {
         remoteUpdateRef.current = true;
         setContent(nextContent);
       },
-      onUpdated: (nextContent, updatedBy) => {
-        if (updatedBy === user?.id) {
+      onUpdated: (update) => {
+        if (update.updatedBy === user?.id) {
           return;
         }
-        remoteUpdateRef.current = true;
-        setContent(nextContent);
+        if (update.title) {
+          setTitle(update.title);
+        }
+        if (update.content !== undefined) {
+          remoteUpdateRef.current = true;
+          setContent(update.content);
+        }
       },
       onEditors: setEditors,
       onEditorJoined: (editor) => {

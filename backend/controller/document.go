@@ -21,11 +21,11 @@ func NewDocumentController(doc usecase.IDocumentUsecase) *DocumentController {
 func (c *DocumentController) Create(e echo.Context) error {
 	userID, err := authenticatedUserID(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	workspaceID, err := parseWorkspaceIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	var req dto.CreateDocumentRequest
 	if err := e.Bind(&req); err != nil {
@@ -33,7 +33,8 @@ func (c *DocumentController) Create(e echo.Context) error {
 	}
 	ctx := e.Request().Context()
 	out, err := c.doc.CreateDocument(ctx, usecase.CreateDocumentInput{
-		UserID: userID, WorkspaceID: workspaceID, Title: req.Title, Content: req.Content, IPAddress: e.RealIP(),
+		UserID: userID, WorkspaceID: workspaceID, Title: req.Title, Content: req.Content,
+		IPAddress: e.RealIP(), UserAgent: e.Request().UserAgent(),
 	})
 	if err != nil {
 		return handleDocumentUseCaseError(e, err)
@@ -47,11 +48,11 @@ func (c *DocumentController) Create(e echo.Context) error {
 func (c *DocumentController) List(e echo.Context) error {
 	userID, err := authenticatedUserID(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	workspaceID, err := parseWorkspaceIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	ctx := e.Request().Context()
 	items, err := c.doc.ListDocuments(ctx, usecase.ListDocumentsInput{
@@ -73,11 +74,11 @@ func (c *DocumentController) List(e echo.Context) error {
 func (c *DocumentController) Get(e echo.Context) error {
 	userID, err := authenticatedUserID(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	documentID, err := parseDocumentIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	ctx := e.Request().Context()
 	out, err := c.doc.GetDocument(ctx, usecase.GetDocumentInput{
@@ -95,11 +96,11 @@ func (c *DocumentController) Get(e echo.Context) error {
 func (c *DocumentController) Update(e echo.Context) error {
 	userID, err := authenticatedUserID(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	documentID, err := parseDocumentIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	var req dto.UpdateDocumentRequest
 	if err := e.Bind(&req); err != nil {
@@ -107,7 +108,8 @@ func (c *DocumentController) Update(e echo.Context) error {
 	}
 	ctx := e.Request().Context()
 	out, err := c.doc.UpdateDocument(ctx, usecase.UpdateDocumentInput{
-		UserID: userID, DocumentID: documentID, Title: req.Title, IPAddress: e.RealIP(),
+		UserID: userID, DocumentID: documentID, Title: req.Title,
+		IPAddress: e.RealIP(), UserAgent: e.Request().UserAgent(),
 	})
 	if err != nil {
 		return handleDocumentUseCaseError(e, err)
@@ -120,15 +122,16 @@ func (c *DocumentController) Update(e echo.Context) error {
 func (c *DocumentController) Delete(e echo.Context) error {
 	userID, err := authenticatedUserID(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	documentID, err := parseDocumentIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	ctx := e.Request().Context()
 	out, err := c.doc.DeleteDocument(ctx, usecase.DeleteDocumentInput{
-		UserID: userID, DocumentID: documentID, IPAddress: e.RealIP(),
+		UserID: userID, DocumentID: documentID,
+		IPAddress: e.RealIP(), UserAgent: e.Request().UserAgent(),
 	})
 	if err != nil {
 		return handleDocumentUseCaseError(e, err)
@@ -142,7 +145,8 @@ func parseDocumentIDParam(e echo.Context) (uuid.UUID, error) {
 	raw := e.Param("documentId")
 	id, err := uuid.Parse(raw)
 	if err != nil {
-		return uuid.Nil, writeWorkspaceError(e, http.StatusBadRequest, "INVALID_REQUEST", "ドキュメントIDが不正です")
+		_ = writeWorkspaceError(e, http.StatusBadRequest, "INVALID_REQUEST", "ドキュメントIDが不正です")
+		return uuid.Nil, errResponseSent
 	}
 	return id, nil
 }

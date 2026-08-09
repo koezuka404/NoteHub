@@ -1,0 +1,64 @@
+name: Deploy Staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: GHCR image tag (default latest)
+        required: false
+        default: latest
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  deploy:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate deploy secrets
+        env:
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_USER }}
+          STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          STAGING_DEPLOY_PATH: ${{ secrets.STAGING_DEPLOY_PATH }}
+          STAGING_GHCR_TOKEN: ${{ secrets.STAGING_GHCR_TOKEN }}
+        run: |
+          missing=0
+          for name in STAGING_HOST STAGING_USER STAGING_SSH_KEY STAGING_DEPLOY_PATH STAGING_GHCR_TOKEN; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing repository secret: $name"
+              missing=1
+            fi
+          done
+          if [[ "$missing" -ne 0 ]]; then
+            echo "Configure staging secrets in GitHub Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          GHCR_TOKEN: ${{ secrets.STAGING_GHCR_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          BACKEND_IMAGE: ghcr.io/${{ github.repository }}/backend:${{ inputs.image_tag }}
+          FRONTEND_IMAGE: ghcr.io/${{ github.repository }}/frontend:${{ inputs.image_tag }}
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          envs: GHCR_TOKEN,GHCR_USER,IMAGE_TAG,BACKEND_IMAGE,FRONTEND_IMAGE
+          script: |
+            set -euo pipefail
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            cd "${{ secrets.STAGING_DEPLOY_PATH }}"
+            export BACKEND_IMAGE
+            export FRONTEND_IMAGE
+            docker pull "$BACKEND_IMAGE"
+            docker pull "$FRONTEND_IMAGE"
+            docker compose -f docker-compose.staging.yml up -d

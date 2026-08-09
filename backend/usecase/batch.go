@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/koezuka404/notehub/entity"
 	"github.com/koezuka404/notehub/repository"
 	"log"
 	"os"
@@ -120,12 +119,18 @@ func (u *DatabaseBackupUseCase) RunOnce(ctx context.Context) error {
 		return err
 	}
 
-	removed, err := u.pruneOldBackups(now)
+	var removed int
+	var err error
+	if backupPruneOldBackups != nil {
+		removed, err = backupPruneOldBackups(u, now)
+	} else {
+		removed, err = u.pruneOldBackups(now)
+	}
 	if err != nil {
 		log.Printf("backup batch: prune old backups: %v", err)
 	}
 
-	audit, err := entity.NewAuditLog(nil, "BACKUP_EXECUTED", "database", nil, map[string]any{
+	audit, err := newAuditLogFn(nil, "BACKUP_EXECUTED", "database", nil, map[string]any{
 		"filename": filename,
 		"path":     outputPath,
 		"removed":  removed,
@@ -161,7 +166,7 @@ func (u *DatabaseBackupUseCase) runPgDump(ctx context.Context, outputPath string
 
 func (u *DatabaseBackupUseCase) pruneOldBackups(now time.Time) (int, error) {
 	cutoff := now.Add(-u.retention)
-	entries, err := os.ReadDir(u.backupDir)
+	entries, err := readBackupDirFn(u.backupDir)
 	if err != nil {
 		return 0, fmt.Errorf("read backup directory: %w", err)
 	}
@@ -171,7 +176,7 @@ func (u *DatabaseBackupUseCase) pruneOldBackups(now time.Time) (int, error) {
 		if entry.IsDir() || !strings.HasPrefix(entry.Name(), "notehub-backup-") || !strings.HasSuffix(entry.Name(), ".sql") {
 			continue
 		}
-		info, err := entry.Info()
+		info, err := backupFileInfoFn(entry)
 		if err != nil {
 			return removed, fmt.Errorf("stat backup file %s: %w", entry.Name(), err)
 		}
@@ -179,10 +184,17 @@ func (u *DatabaseBackupUseCase) pruneOldBackups(now time.Time) (int, error) {
 			continue
 		}
 		path := filepath.Join(u.backupDir, entry.Name())
-		if err := os.Remove(path); err != nil {
+		if err := removeBackupFileFn(path); err != nil {
 			return removed, fmt.Errorf("remove old backup %s: %w", path, err)
 		}
 		removed++
 	}
 	return removed, nil
 }
+
+var (
+	backupPruneOldBackups func(u *DatabaseBackupUseCase, now time.Time) (int, error)
+	readBackupDirFn       = os.ReadDir
+	backupFileInfoFn      = func(entry os.DirEntry) (os.FileInfo, error) { return entry.Info() }
+	removeBackupFileFn    = os.Remove
+)

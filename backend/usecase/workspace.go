@@ -93,7 +93,7 @@ type auditDeleteMetadata struct {
 }
 
 func workspaceDeleteMetadata(reason string) (json.RawMessage, error) {
-	raw, err := json.Marshal(auditDeleteMetadata{Reason: reason, DeleteType: "logical"})
+	raw, err := jsonMarshalFn(auditDeleteMetadata{Reason: reason, DeleteType: "logical"})
 	if err != nil {
 		return nil, fmt.Errorf("marshal delete metadata: %w", err)
 	}
@@ -177,11 +177,11 @@ func (uc *WorkspaceUseCase) CreateWorkspace(ctx context.Context, input CreateWor
 	}
 
 	now := uc.currentTime()
-	workspace, err := entity.NewWorkspace(user.ID, normalizeWorkspaceName(input.Name), now)
+	workspace, err := newWorkspaceFn(user.ID, normalizeWorkspaceName(input.Name), now)
 	if err != nil {
 		return nil, fmt.Errorf("create workspace entity: %w", err)
 	}
-	member, err := entity.NewWorkspaceMember(workspace.ID, user.ID, entity.WorkspaceRoleHost, now)
+	member, err := newWorkspaceMemberFn(workspace.ID, user.ID, entity.WorkspaceRoleHost, now)
 	if err != nil {
 		return nil, fmt.Errorf("create workspace host member: %w", err)
 	}
@@ -193,7 +193,7 @@ func (uc *WorkspaceUseCase) CreateWorkspace(ctx context.Context, input CreateWor
 		if err := uc.members.Create(txCtx, &member); err != nil {
 			return fmt.Errorf("save workspace host: %w", err)
 		}
-		audit, err := entity.NewAuditLog(&input.UserID, "WORKSPACE_CREATED", "workspace", &workspace.ID, nil, now)
+		audit, err := newAuditLogFn(&input.UserID, "WORKSPACE_CREATED", "workspace", &workspace.ID, nil, now)
 		if err != nil {
 			return fmt.Errorf("create audit log entity: %w", err)
 		}
@@ -365,14 +365,14 @@ func (uc *WorkspaceUseCase) UpdateWorkspace(ctx context.Context, input UpdateWor
 		if workspace.IsDeleted() {
 			return ErrWorkspaceAlreadyDeleted
 		}
-		if err := workspace.Rename(normalizeWorkspaceName(input.Name), now); err != nil {
+		if err := renameWorkspaceFn(workspace, normalizeWorkspaceName(input.Name), now); err != nil {
 			return err
 		}
 		if err := uc.workspaces.Update(txCtx, workspace); err != nil {
 			return fmt.Errorf("update workspace: %w", err)
 		}
 
-		audit, err := entity.NewAuditLog(&input.UserID, "WORKSPACE_UPDATED", "workspace", &workspace.ID, nil, now)
+		audit, err := newAuditLogFn(&input.UserID, "WORKSPACE_UPDATED", "workspace", &workspace.ID, nil, now)
 		if err != nil {
 			return fmt.Errorf("create audit log entity: %w", err)
 		}
@@ -442,7 +442,7 @@ func (uc *WorkspaceUseCase) DeleteWorkspace(ctx context.Context, input DeleteWor
 		if workspace.IsDeleted() {
 			return ErrWorkspaceAlreadyDeleted
 		}
-		if err := workspace.LogicalDelete(input.UserID, reason, now); err != nil {
+		if err := logicalDeleteWorkspaceFn(workspace, input.UserID, reason, now); err != nil {
 			return err
 		}
 		if err := uc.workspaces.Update(txCtx, workspace); err != nil {
@@ -453,7 +453,7 @@ func (uc *WorkspaceUseCase) DeleteWorkspace(ctx context.Context, input DeleteWor
 		if err != nil {
 			return err
 		}
-		audit, err := entity.NewAuditLog(&input.UserID, "WORKSPACE_DELETED", "workspace", &workspace.ID, metadata, now)
+		audit, err := newAuditLogFn(&input.UserID, "WORKSPACE_DELETED", "workspace", &workspace.ID, metadata, now)
 		if err != nil {
 			return fmt.Errorf("create audit log entity: %w", err)
 		}

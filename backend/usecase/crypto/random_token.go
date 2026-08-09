@@ -20,8 +20,15 @@ func (s *RandomTokenService) GenerateCSRFToken() (string, error) {
 
 func generateRandomToken(size int) (string, error) {
 	value := make([]byte, size)
-	if _, err := rand.Read(value); err != nil {
+	readRandom := randomReader
+	if readRandom == nil {
+		readRandom = rand.Read
+	}
+	if _, err := readRandom(value); err != nil {
 		return "", fmt.Errorf("generate random token: %w", err)
 	}
 	return base64.RawURLEncoding.EncodeToString(value), nil
 }
+
+// randomReader exists for tests; production uses crypto/rand.Read.
+var randomReader = rand.Read

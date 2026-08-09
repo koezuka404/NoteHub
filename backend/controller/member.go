@@ -21,11 +21,11 @@ func NewMemberController(member usecase.IMemberUsecase) *MemberController {
 func (c *MemberController) Search(e echo.Context) error {
 	userID, err := authenticatedUserID(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	workspaceID, err := parseWorkspaceIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	email := e.QueryParam("email")
 	ctx := e.Request().Context()
@@ -43,11 +43,11 @@ func (c *MemberController) Search(e echo.Context) error {
 func (c *MemberController) List(e echo.Context) error {
 	userID, err := authenticatedUserID(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	workspaceID, err := parseWorkspaceIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	ctx := e.Request().Context()
 	items, err := c.member.ListMembers(ctx, usecase.ListMembersInput{
@@ -69,11 +69,11 @@ func (c *MemberController) List(e echo.Context) error {
 func (c *MemberController) Add(e echo.Context) error {
 	userID, err := authenticatedUserID(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	workspaceID, err := parseWorkspaceIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	var req dto.AddMemberRequest
 	if err := e.Bind(&req); err != nil {
@@ -99,15 +99,15 @@ func (c *MemberController) Add(e echo.Context) error {
 func (c *MemberController) Remove(e echo.Context) error {
 	userID, err := authenticatedUserID(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	workspaceID, err := parseWorkspaceIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	targetID, err := parseUserIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	ctx := e.Request().Context()
 	if err := c.member.RemoveMember(ctx, usecase.RemoveMemberInput{
@@ -122,7 +122,8 @@ func parseUserIDParam(e echo.Context) (uuid.UUID, error) {
 	raw := e.Param("userId")
 	id, err := uuid.Parse(raw)
 	if err != nil {
-		return uuid.Nil, writeWorkspaceError(e, http.StatusBadRequest, "INVALID_REQUEST", "ユーザーIDが不正です")
+		_ = writeWorkspaceError(e, http.StatusBadRequest, "INVALID_REQUEST", "ユーザーIDが不正です")
+		return uuid.Nil, errResponseSent
 	}
 	return id, nil
 }

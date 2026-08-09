@@ -1,8 +1,10 @@
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   createDocument,
+  deleteDocument,
   deleteWorkspace,
+  ensureFreshAccessToken,
   getWorkspace,
   listDocuments,
   updateWorkspace,
@@ -12,6 +14,7 @@ import {
 import { useAuth } from './auth';
 import AppLayout from './AppLayout';
 import DocumentMonacoEditor from './DocumentMonacoEditor';
+import { connectWorkspaceWebSocket } from './workspaceWs';
 import { formatDate, getErrorMessage } from './utils';
 
 export default function DocumentsPage() {
@@ -29,8 +32,15 @@ export default function DocumentsPage() {
   const [deleteReason, setDeleteReason] = useState('');
   const [updatingWorkspace, setUpdatingWorkspace] = useState(false);
   const [deletingWorkspace, setDeletingWorkspace] = useState(false);
+  const [deletingDocumentId, setDeletingDocumentId] = useState('');
+  const accessTokenRef = useRef<string | null>(accessToken);
+  const wsRef = useRef<ReturnType<typeof connectWorkspaceWebSocket> | null>(null);
 
   const isHost = workspace?.role === 'host';
+
+  useEffect(() => {
+    accessTokenRef.current = accessToken;
+  }, [accessToken]);
 
   const loadPage = useCallback(async () => {
     if (!accessToken || !workspaceId) {
@@ -56,6 +66,60 @@ export default function DocumentsPage() {
   useEffect(() => {
     void loadPage();
   }, [loadPage]);
+
+  useEffect(() => {
+    if (!accessToken || !workspaceId || loading) {
+      return;
+    }
+
+    const connection = connectWorkspaceWebSocket(
+      workspaceId,
+      {
+        getAccessToken: () => accessTokenRef.current,
+        refreshAccessToken: ensureFreshAccessToken,
+      },
+      {
+        onDocumentCreated: (document) => {
+          setDocuments((current) => {
+            if (current.some((item) => item.id === document.id)) {
+              return current;
+            }
+            return [document, ...current];
+          });
+        },
+        onDocumentUpdated: (document) => {
+          setDocuments((current) =>
+            current.map((item) => (item.id === document.id ? document : item)),
+          );
+        },
+        onDocumentDeleted: (documentId) => {
+          setDocuments((current) => current.filter((item) => item.id !== documentId));
+        },
+      },
+    );
+    wsRef.current = connection;
+
+    return () => {
+      connection.close();
+      wsRef.current = null;
+    };
+  }, [accessToken, workspaceId, loading]);
+
+  async function handleDeleteDocument(documentId: string) {
+    if (!accessToken || !window.confirm('このドキュメントを削除しますか？')) {
+      return;
+    }
+    setDeletingDocumentId(documentId);
+    setError('');
+    try {
+      await deleteDocument(accessToken, documentId);
+      setDocuments((current) => current.filter((item) => item.id !== documentId));
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setDeletingDocumentId('');
+    }
+  }
 
   async function handleCreateDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -162,14 +226,22 @@ export default function DocumentsPage() {
         {loading ? <p className="loading">読み込み中...</p> : null}
         <ul className="item-list">
           {documents.map((document) => (
-            <li key={document.id}>
+            <li key={document.id} className="document-list-item">
               <Link
                 to={`/workspaces/${workspaceId}/documents/${document.id}`}
-                className="list-button list-link"
+                className="list-button list-link document-list-link"
               >
                 <span className="list-title">{document.title}</span>
                 <span className="list-meta">更新: {formatDate(document.updatedAt)}</span>
               </Link>
+              <button
+                type="button"
+                className="button compact-button danger-button document-list-delete"
+                disabled={deletingDocumentId === document.id}
+                onClick={() => void handleDeleteDocument(document.id)}
+              >
+                {deletingDocumentId === document.id ? '削除中...' : '削除'}
+              </button>
             </li>
           ))}
         </ul>

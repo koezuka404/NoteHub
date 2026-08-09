@@ -12,6 +12,8 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
+var jsonMarshalDocumentCacheFn = json.Marshal
+
 const (
 	documentContentKeyPrefix     = "document:"
 	documentContentKeySuffix     = ":content"
@@ -91,7 +93,7 @@ func (s *DocumentCacheStore) SetContent(ctx context.Context, documentID uuid.UUI
 	defer cancel()
 
 	at := updatedAt.UTC().Format(time.RFC3339)
-	contentRaw, err := json.Marshal(contentCacheValue{
+	contentRaw, err := jsonMarshalDocumentCacheFn(contentCacheValue{
 		Content:   content,
 		UpdatedBy: updatedBy.String(),
 		UpdatedAt: at,
@@ -99,7 +101,7 @@ func (s *DocumentCacheStore) SetContent(ctx context.Context, documentID uuid.UUI
 	if err != nil {
 		return fmt.Errorf("encode document content cache: %w", err)
 	}
-	autosaveRaw, err := json.Marshal(autosaveCacheValue{
+	autosaveRaw, err := jsonMarshalDocumentCacheFn(autosaveCacheValue{
 		DocumentID: documentID.String(),
 		UpdatedBy:  updatedBy.String(),
 		UpdatedAt:  at,
@@ -157,7 +159,7 @@ func (s *DocumentCacheStore) MarkClean(ctx context.Context, documentID uuid.UUID
 		return fmt.Errorf("decode document autosave cache: %w", err)
 	}
 	value.Dirty = false
-	encoded, err := json.Marshal(value)
+	encoded, err := jsonMarshalDocumentCacheFn(value)
 	if err != nil {
 		return fmt.Errorf("encode document autosave cache: %w", err)
 	}
@@ -234,11 +236,7 @@ func (s *DocumentCacheStore) listDirtyDocumentIDs(ctx context.Context, idle time
 				continue
 			}
 		}
-		if _, ok := seen[documentID]; ok {
-			continue
-		}
-		seen[documentID] = struct{}{}
-		ids = append(ids, documentID)
+		ids = appendUniqueDirtyDocumentIDFn(ids, seen, documentID)
 	}
 	if err := iter.Err(); err != nil {
 		return nil, fmt.Errorf("scan dirty document ids: %w", err)

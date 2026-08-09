@@ -144,7 +144,7 @@ func (uc *MemberUseCase) AddMember(ctx context.Context, input AddMemberInput) (*
 	}
 
 	now := uc.currentTime()
-	member, err := entity.NewWorkspaceMember(input.WorkspaceID, input.TargetUserID, entity.WorkspaceRoleMember, now)
+	member, err := newWorkspaceMemberFn(input.WorkspaceID, input.TargetUserID, entity.WorkspaceRoleMember, now)
 	if err != nil {
 		return nil, fmt.Errorf("create workspace member entity: %w", err)
 	}
@@ -158,7 +158,7 @@ func (uc *MemberUseCase) AddMember(ctx context.Context, input AddMemberInput) (*
 			return fmt.Errorf("save workspace member: %w", err)
 		}
 
-		audit, err := entity.NewAuditLog(&input.UserID, "MEMBER_ADDED", "workspace_member", &member.ID, nil, now)
+		audit, err := newAuditLogFn(&input.UserID, "MEMBER_ADDED", "workspace_member", &member.ID, nil, now)
 		if err != nil {
 			return fmt.Errorf("create audit log entity: %w", err)
 		}
@@ -260,7 +260,7 @@ func (uc *MemberUseCase) RemoveMember(ctx context.Context, input RemoveMemberInp
 			return fmt.Errorf("delete workspace member: %w", err)
 		}
 
-		audit, err := entity.NewAuditLog(&input.UserID, "MEMBER_REMOVED", "workspace_member", &targetMember.ID, nil, now)
+		audit, err := newAuditLogFn(&input.UserID, "MEMBER_REMOVED", "workspace_member", &targetMember.ID, nil, now)
 		if err != nil {
 			return fmt.Errorf("create audit log entity: %w", err)
 		}

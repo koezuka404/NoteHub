@@ -1,0 +1,140 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: backend/go.sum
+
+      - name: Go vet
+        working-directory: backend
+        run: go vet ./...
+
+  test:
+    name: Unit Test & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: backend/go.sum
+
+      - name: Backend unit tests
+        working-directory: backend
+        run: go test ./... -count=1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Frontend install
+        working-directory: frontend
+        run: npm ci
+
+      - name: Frontend unit tests
+        working-directory: frontend
+        run: npm test
+
+      - name: Frontend build
+        working-directory: frontend
+        run: npm run build
+
+  integration:
+    name: Integration Smoke
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: notehub
+          POSTGRES_PASSWORD: notehub
+          POSTGRES_DB: notehub
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U notehub -d notehub"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      INTEGRATION_ONLY: "1"
+      USE_COMPOSE_SERVICES: "0"
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      REDIS_HOST: localhost
+      REDIS_PORT: "6379"
+      DATABASE_URL: postgres://notehub:notehub@localhost:5432/notehub?sslmode=disable
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET: notehub-ci-secret-key-32bytes-minimum
+      JWT_ISSUER: notehub-api
+      JWT_AUDIENCE: notehub-client
+      APP_ENV: test
+      BACKEND_URL: http://localhost:8082
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: backend/go.sum
+
+      - name: Integration smoke tests
+        run: bash scripts/test-all.sh
+
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/Dockerfile
+          push: false
+          tags: notehub-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          push: false
+          tags: notehub-frontend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

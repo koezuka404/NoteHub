@@ -30,7 +30,7 @@ func (b *AutoSaveBatch) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			runCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-			if err := b.autosave.RunOnce(runCtx); err != nil {
+			if err := runAutoSaveOnce(b, runCtx); err != nil {
 				log.Printf("autosave batch: %v", err)
 			}
 			cancel()

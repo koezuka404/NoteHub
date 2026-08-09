@@ -29,6 +29,7 @@ type IDocumentEditorsStore interface {
 
 type IDocumentWebSocketUsecase interface {
 	PrepareConnection(ctx context.Context, input PrepareWebSocketConnectionInput) (*PrepareWebSocketConnectionOutput, error)
+	PrepareWorkspaceConnection(ctx context.Context, input PrepareWorkspaceConnectionInput) error
 	RegisterConnection(ctx context.Context, input RegisterWebSocketConnectionInput) (*RegisterWebSocketConnectionOutput, error)
 	UnregisterConnection(ctx context.Context, input UnregisterWebSocketConnectionInput) (*UnregisterWebSocketConnectionOutput, error)
 	ApplyDocumentEdit(ctx context.Context, input ApplyDocumentEditInput) (*ApplyDocumentEditOutput, error)
@@ -109,6 +110,21 @@ func (uc *DocumentWebSocketUseCase) PrepareConnection(ctx context.Context, input
 		Content:     content,
 		UpdatedAt:   updatedAt,
 	}, nil
+}
+
+type PrepareWorkspaceConnectionInput struct {
+	UserID      uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+func (uc *DocumentWebSocketUseCase) PrepareWorkspaceConnection(ctx context.Context, input PrepareWorkspaceConnectionInput) error {
+	if input.UserID == uuid.Nil || input.WorkspaceID == uuid.Nil {
+		return ErrValidation
+	}
+	_, err := uc.access.CheckWorkspaceAccess(ctx, CheckWorkspaceAccessInput{
+		UserID: input.UserID, WorkspaceID: input.WorkspaceID,
+	})
+	return err
 }
 
 type RegisterWebSocketConnectionInput struct {

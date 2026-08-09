@@ -46,20 +46,15 @@ func (s *WebSocketSessionStore) TryAddConnection(
 	ctx, cancel := s.withTimeout(ctx)
 	defer cancel()
 
-	ttlSeconds := int64(ttl.Seconds())
-	if ttlSeconds < 1 {
-		ttlSeconds = 1
-	}
-
-	key := websocketUserConnectionsKey(documentID, userID)
-	result, err := tryAddWebSocketConnectionScript.Run(
+	result, err := runTryAddWebSocketConnectionScriptFn(
 		ctx,
-		s.client,
-		[]string{key},
-		connectionID.String(),
+		s,
+		documentID,
+		userID,
+		connectionID,
 		maxConnections,
-		ttlSeconds,
-	).Int64Slice()
+		ttl,
+	)
 	if err != nil {
 		return 0, false, fmt.Errorf("try add websocket connection: %w", err)
 	}
@@ -77,11 +72,37 @@ func (s *WebSocketSessionStore) RemoveConnection(ctx context.Context, documentID
 	if err := s.client.SRem(ctx, key, connectionID.String()).Err(); err != nil {
 		return 0, fmt.Errorf("remove websocket connection: %w", err)
 	}
-	count, err := s.client.SCard(ctx, key).Result()
+	count, err := countWebSocketConnectionsFn(s.client, ctx, key)
 	if err != nil {
 		return 0, fmt.Errorf("count websocket connections after remove: %w", err)
 	}
 	return int(count), nil
+}
+
+func init() {
+	runTryAddWebSocketConnectionScriptFn = func(
+		ctx context.Context,
+		store *WebSocketSessionStore,
+		documentID, userID, connectionID uuid.UUID,
+		maxConnections int,
+		ttl time.Duration,
+	) ([]int64, error) {
+		ttlSeconds := int64(ttl.Seconds())
+		if ttlSeconds < 1 {
+			ttlSeconds = 1
+		}
+		key := websocketUserConnectionsKey(documentID, userID)
+		ctx, cancel := store.withTimeout(ctx)
+		defer cancel()
+		return tryAddWebSocketConnectionScript.Run(
+			ctx,
+			store.client,
+			[]string{key},
+			connectionID.String(),
+			maxConnections,
+			ttlSeconds,
+		).Int64Slice()
+	}
 }
 
 func websocketUserConnectionsKey(documentID, userID uuid.UUID) string {

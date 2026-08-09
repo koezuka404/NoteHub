@@ -59,8 +59,11 @@ type IDocumentFlushService interface {
 // document_websocket_notifier.go
 
 type IDocumentWebSocketNotifier interface {
+	NotifyDocumentCreated(workspaceID uuid.UUID, documentID uuid.UUID, title, updatedBy, updatedAt string) error
+	NotifyDocumentTitleUpdated(workspaceID, documentID uuid.UUID, title, updatedBy, updatedAt string) error
 	NotifyDocumentRestored(documentID uuid.UUID, content string, sourceVersionID uuid.UUID) error
 	NotifyDocumentDeleted(documentID, deletedBy uuid.UUID, deletedAt string) error
+	NotifyDocumentListDeleted(workspaceID, documentID, deletedBy uuid.UUID, deletedAt string) error
 	NotifyWorkspaceDeleted(workspaceID, deletedBy uuid.UUID, deletedAt string) error
 }
 
@@ -166,6 +169,7 @@ type CreateDocumentInput struct {
 	Title       string
 	Content     string
 	IPAddress   string
+	UserAgent   string
 }
 
 type CreateDocumentOutput struct {
@@ -189,7 +193,7 @@ func (uc *DocumentUseCase) CreateDocument(ctx context.Context, input CreateDocum
 	}
 
 	now := uc.currentTime()
-	doc, err := entity.NewDocument(input.WorkspaceID, input.UserID, normalizeTitle(input.Title), input.Content, now)
+	doc, err := newDocumentFn(input.WorkspaceID, input.UserID, normalizeTitle(input.Title), input.Content, now)
 	if err != nil {
 		return nil, fmt.Errorf("create document entity: %w", err)
 	}
@@ -198,17 +202,29 @@ func (uc *DocumentUseCase) CreateDocument(ctx context.Context, input CreateDocum
 		if err := uc.docs.Create(txCtx, &doc); err != nil {
 			return fmt.Errorf("save document: %w", err)
 		}
-		audit, err := entity.NewAuditLog(&input.UserID, "DOCUMENT_CREATED", "document", &doc.ID, nil, now)
+		audit, err := newAuditLogFn(&input.UserID, "DOCUMENT_CREATED", "document", &doc.ID, nil, now)
 		if err != nil {
 			return fmt.Errorf("create audit log entity: %w", err)
 		}
-		audit.IPAddress = input.IPAddress
+		entity.ApplyDocumentAuditContext(&audit, doc.WorkspaceID, input.IPAddress, input.UserAgent)
 		if err := uc.auditLogs.Create(txCtx, &audit); err != nil {
 			return fmt.Errorf("save audit log: %w", err)
 		}
 		return nil
 	}); err != nil {
 		return nil, err
+	}
+
+	if uc.notifier != nil {
+		if err := uc.notifier.NotifyDocumentCreated(
+			doc.WorkspaceID,
+			doc.ID,
+			doc.Title,
+			doc.CreatedBy.String(),
+			doc.CreatedAt.Format(timeFormat),
+		); err != nil {
+			return nil, fmt.Errorf("notify document created: %w", err)
+		}
 	}
 
 	return &CreateDocumentOutput{
@@ -304,6 +320,7 @@ type UpdateDocumentInput struct {
 	DocumentID uuid.UUID
 	Title      string
 	IPAddress  string
+	UserAgent  string
 }
 
 type UpdateDocumentOutput struct {
@@ -346,11 +363,11 @@ func (uc *DocumentUseCase) UpdateDocument(ctx context.Context, input UpdateDocum
 			return fmt.Errorf("update document: %w", err)
 		}
 
-		audit, err := entity.NewAuditLog(&input.UserID, "DOCUMENT_UPDATED", "document", &locked.ID, nil, now)
+		audit, err := newAuditLogFn(&input.UserID, "DOCUMENT_UPDATED", "document", &locked.ID, nil, now)
 		if err != nil {
 			return fmt.Errorf("create audit log entity: %w", err)
 		}
-		audit.IPAddress = input.IPAddress
+		entity.ApplyDocumentAuditContext(&audit, locked.WorkspaceID, input.IPAddress, input.UserAgent)
 		if err := uc.auditLogs.Create(txCtx, &audit); err != nil {
 			return fmt.Errorf("save audit log: %w", err)
 		}
@@ -364,6 +381,18 @@ func (uc *DocumentUseCase) UpdateDocument(ctx context.Context, input UpdateDocum
 	}); err != nil {
 		return nil, err
 	}
+
+	if uc.notifier != nil {
+		if err := uc.notifier.NotifyDocumentTitleUpdated(
+			doc.WorkspaceID,
+			output.ID,
+			output.Title,
+			input.UserID.String(),
+			output.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("notify document title updated: %w", err)
+		}
+	}
 	return output, nil
 }
 
@@ -373,6 +402,7 @@ type DeleteDocumentInput struct {
 	UserID     uuid.UUID
 	DocumentID uuid.UUID
 	IPAddress  string
+	UserAgent  string
 }
 
 type DeleteDocumentOutput struct {
@@ -416,11 +446,11 @@ func (uc *DocumentUseCase) DeleteDocument(ctx context.Context, input DeleteDocum
 			return fmt.Errorf("update deleted document: %w", err)
 		}
 
-		audit, err := entity.NewAuditLog(&input.UserID, "DOCUMENT_DELETED", "document", &locked.ID, nil, now)
+		audit, err := newAuditLogFn(&input.UserID, "DOCUMENT_DELETED", "document", &locked.ID, nil, now)
 		if err != nil {
 			return fmt.Errorf("create audit log entity: %w", err)
 		}
-		audit.IPAddress = input.IPAddress
+		entity.ApplyDocumentAuditContext(&audit, locked.WorkspaceID, input.IPAddress, input.UserAgent)
 		if err := uc.auditLogs.Create(txCtx, &audit); err != nil {
 			return fmt.Errorf("save audit log: %w", err)
 		}
@@ -440,6 +470,9 @@ func (uc *DocumentUseCase) DeleteDocument(ctx context.Context, input DeleteDocum
 		}
 	}
 	if uc.notifier != nil {
+		if err := uc.notifier.NotifyDocumentListDeleted(doc.WorkspaceID, output.DocumentID, input.UserID, output.DeletedAt); err != nil {
+			return nil, fmt.Errorf("notify document list deleted: %w", err)
+		}
 		if err := uc.notifier.NotifyDocumentDeleted(output.DocumentID, input.UserID, output.DeletedAt); err != nil {
 			return nil, fmt.Errorf("notify document deleted: %w", err)
 		}

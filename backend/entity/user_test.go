@@ -114,3 +114,96 @@ func TestUser_LogicalDelete_RequiresSuspended(t *testing.T) {
 		t.Fatalf("expected ErrUserNotSuspended, got %v", err)
 	}
 }
+
+func TestUser_TableName(t *testing.T) {
+	if (User{}).TableName() != "users" {
+		t.Fatalf("table name = %q", (User{}).TableName())
+	}
+}
+
+func TestNewUser(t *testing.T) {
+	now := testNow()
+	user, err := NewUser("  Alice  ", "  ALICE@Example.COM  ", " hash ", now)
+	if err != nil {
+		t.Fatalf("NewUser: %v", err)
+	}
+	if user.Name != "Alice" || user.Email != "alice@example.com" || user.PasswordHash != "hash" {
+		t.Fatalf("unexpected user: %+v", user)
+	}
+	if user.Status != UserStatusActive || user.AuthVersion != 1 {
+		t.Fatalf("unexpected status/auth version: %+v", user)
+	}
+}
+
+func TestNewUser_ValidationErrors(t *testing.T) {
+	now := testNow()
+	if _, err := NewUser("", "a@b.com", "hash", now); err == nil {
+		t.Fatal("expected error for empty name")
+	}
+	if _, err := NewUser("name", "", "hash", now); err == nil {
+		t.Fatal("expected error for empty email")
+	}
+	if _, err := NewUser("name", "a@b.com", " ", now); err == nil {
+		t.Fatal("expected error for empty password hash")
+	}
+}
+
+func TestUser_IsSuspendedAndIsDeleted(t *testing.T) {
+	user := activeUser()
+	if user.IsSuspended() || user.IsDeleted() {
+		t.Fatal("active user should not be suspended or deleted")
+	}
+	_ = user.Suspend(testNow())
+	if !user.IsSuspended() {
+		t.Fatal("expected suspended")
+	}
+
+	deleted := activeUser()
+	deleted.DeletedAt = timePointer(testNow())
+	if !deleted.IsDeleted() {
+		t.Fatal("user with deleted_at should be deleted")
+	}
+}
+
+func TestUser_Suspend_DeletedUser(t *testing.T) {
+	user := activeUser()
+	now := testNow()
+	_ = user.Suspend(now)
+	_ = user.LogicalDelete("deleted+"+user.ID.String()+"@notehub.invalid", "hash", now.Add(time.Minute))
+	err := user.Suspend(now.Add(2 * time.Minute))
+	if !errors.Is(err, ErrUserDeleted) {
+		t.Fatalf("expected ErrUserDeleted, got %v", err)
+	}
+}
+
+func TestUser_Reactivate_DeletedUser(t *testing.T) {
+	user := activeUser()
+	now := testNow()
+	_ = user.Suspend(now)
+	_ = user.LogicalDelete("deleted+"+user.ID.String()+"@notehub.invalid", "hash", now.Add(time.Minute))
+	err := user.Reactivate(now.Add(2 * time.Minute))
+	if !errors.Is(err, ErrUserDeleted) {
+		t.Fatalf("expected ErrUserDeleted, got %v", err)
+	}
+}
+
+func TestUser_LogicalDelete_AlreadyDeleted(t *testing.T) {
+	user := activeUser()
+	now := testNow()
+	_ = user.Suspend(now)
+	email := "deleted+" + user.ID.String() + "@notehub.invalid"
+	_ = user.LogicalDelete(email, "hash", now.Add(time.Minute))
+	err := user.LogicalDelete(email, "hash", now.Add(2*time.Minute))
+	if !errors.Is(err, ErrUserDeleted) {
+		t.Fatalf("expected ErrUserDeleted, got %v", err)
+	}
+}
+
+func TestUser_LogicalDelete_EmptyAnonymizedFields(t *testing.T) {
+	user := activeUser()
+	_ = user.Suspend(testNow())
+	err := user.LogicalDelete("  ", "hash", testNow())
+	if err == nil {
+		t.Fatal("expected error for empty anonymized email")
+	}
+}

@@ -11,6 +11,8 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+var errResponseSent = errors.New("controller: response sent")
+
 type WorkspaceController struct {
 	workspace usecase.IWorkspaceUsecase
 }
@@ -22,7 +24,7 @@ func NewWorkspaceController(workspace usecase.IWorkspaceUsecase) *WorkspaceContr
 func (c *WorkspaceController) Create(e echo.Context) error {
 	userID, err := authenticatedUserID(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	var req dto.CreateWorkspaceRequest
 	if err := e.Bind(&req); err != nil {
@@ -48,7 +50,7 @@ func (c *WorkspaceController) Create(e echo.Context) error {
 func (c *WorkspaceController) List(e echo.Context) error {
 	userID, err := authenticatedUserID(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	ctx := e.Request().Context()
 	items, err := c.workspace.ListWorkspaces(ctx, usecase.ListWorkspacesInput{UserID: userID})
@@ -74,11 +76,11 @@ func (c *WorkspaceController) List(e echo.Context) error {
 func (c *WorkspaceController) Get(e echo.Context) error {
 	userID, err := authenticatedUserID(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	workspaceID, err := parseWorkspaceIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	ctx := e.Request().Context()
 	out, err := c.workspace.GetWorkspace(ctx, usecase.GetWorkspaceInput{
@@ -105,11 +107,11 @@ func (c *WorkspaceController) Get(e echo.Context) error {
 func (c *WorkspaceController) Update(e echo.Context) error {
 	userID, err := authenticatedUserID(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	workspaceID, err := parseWorkspaceIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	var req dto.UpdateWorkspaceRequest
 	if err := e.Bind(&req); err != nil {
@@ -135,11 +137,11 @@ func (c *WorkspaceController) Update(e echo.Context) error {
 func (c *WorkspaceController) Delete(e echo.Context) error {
 	userID, err := authenticatedUserID(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	workspaceID, err := parseWorkspaceIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	var req dto.DeleteWorkspaceRequest
 	if err := e.Bind(&req); err != nil {
@@ -164,7 +166,8 @@ func (c *WorkspaceController) Delete(e echo.Context) error {
 func authenticatedUserID(e echo.Context) (uuid.UUID, error) {
 	userID, ok := e.Get(appmiddleware.ContextUserID).(uuid.UUID)
 	if !ok || userID == uuid.Nil {
-		return uuid.Nil, writeWorkspaceError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+		_ = writeWorkspaceError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+		return uuid.Nil, errResponseSent
 	}
 	return userID, nil
 }
@@ -173,7 +176,8 @@ func parseWorkspaceIDParam(e echo.Context) (uuid.UUID, error) {
 	raw := e.Param("workspaceId")
 	id, err := uuid.Parse(raw)
 	if err != nil {
-		return uuid.Nil, writeWorkspaceError(e, http.StatusBadRequest, "INVALID_REQUEST", "ワークスペースIDが不正です")
+		_ = writeWorkspaceError(e, http.StatusBadRequest, "INVALID_REQUEST", "ワークスペースIDが不正です")
+		return uuid.Nil, errResponseSent
 	}
 	return id, nil
 }

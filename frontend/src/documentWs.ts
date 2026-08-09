@@ -12,12 +12,18 @@ type WsEnvelope = {
   timestamp: string;
 };
 
+type DocumentUpdate = {
+  content?: string;
+  title?: string;
+  updatedBy: string;
+};
+
 type DocumentWsHandlers = {
   onOpen?: () => void;
   onClose?: () => void;
   onError?: (message: string) => void;
   onSync?: (content: string) => void;
-  onUpdated?: (content: string, updatedBy: string) => void;
+  onUpdated?: (update: DocumentUpdate) => void;
   onEditors?: (editors: EditorInfo[]) => void;
   onEditorJoined?: (editor: EditorInfo) => void;
   onEditorLeft?: (editor: EditorInfo) => void;
@@ -105,10 +111,11 @@ export function connectDocumentWebSocket(
         handlers.onSync?.(String(envelope.data.content ?? ''));
         break;
       case 'document_updated':
-        handlers.onUpdated?.(
-          String(envelope.data.content ?? ''),
-          String(envelope.data.updated_by ?? ''),
-        );
+        handlers.onUpdated?.({
+          content: envelope.data.content != null ? String(envelope.data.content) : undefined,
+          title: envelope.data.title != null ? String(envelope.data.title) : undefined,
+          updatedBy: String(envelope.data.updated_by ?? ''),
+        });
         break;
       case 'editors_sync':
         handlers.onEditors?.(parseEditors(envelope.data));

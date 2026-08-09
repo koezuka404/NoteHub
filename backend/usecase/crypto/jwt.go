@@ -48,7 +48,7 @@ func (s *JWTService) GenerateAccessToken(userID uuid.UUID, authVersion uint, now
 		"ver": authVersion,
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signedToken, err := token.SignedString(s.secret)
+	signedToken, err := accessTokenSigner(token, s.secret)
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("sign access token: %w", err)
 	}
@@ -60,7 +60,7 @@ func (s *JWTService) ValidateAccessToken(raw string, now time.Time) (AccessToken
 	if raw == "" {
 		return AccessTokenClaims{}, errors.New("access token is empty")
 	}
-	parsed, err := jwt.Parse(raw, func(token *jwt.Token) (any, error) {
+	parsed, err := parseAccessTokenFn(raw, func(token *jwt.Token) (any, error) {
 		if token.Method.Alg() != jwt.SigningMethodHS256.Alg() {
 			return nil, errors.New("unexpected signing algorithm")
 		}
@@ -120,3 +120,10 @@ func uintClaim(value any) (uint, error) {
 		return 0, errors.New("invalid auth version")
 	}
 }
+
+var (
+	accessTokenSigner = func(token *jwt.Token, secret []byte) (string, error) {
+		return token.SignedString(secret)
+	}
+	parseAccessTokenFn = jwt.Parse
+)

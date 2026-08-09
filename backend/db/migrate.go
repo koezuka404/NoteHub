@@ -3,85 +3,108 @@ package db
 import (
 	"fmt"
 
-	"github.com/koezuka404/notehub/entity"
 	"gorm.io/gorm"
 )
 
 func Migrate(gdb *gorm.DB) error {
 	return gdb.Transaction(func(tx *gorm.DB) error {
-		if err := tx.AutoMigrate(
-			&entity.User{},
-			&entity.RefreshToken{},
-			&entity.AuditLog{},
-			&entity.Workspace{},
-			&entity.WorkspaceMember{},
-			&entity.Document{},
-			&entity.DocumentVersion{},
-		); err != nil {
+		if err := autoMigrateFn(tx); err != nil {
 			return fmt.Errorf("auto migrate: %w", err)
 		}
 
-		statements := []string{
-			`CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email_active
-			 ON users (LOWER(email))
-			 WHERE deleted_at IS NULL`,
-
-			`CREATE INDEX IF NOT EXISTS idx_users_status
-			 ON users (status)`,
-
-			`CREATE UNIQUE INDEX IF NOT EXISTS uq_refresh_tokens_hash
-			 ON refresh_tokens (token_hash)`,
-
-			`CREATE INDEX IF NOT EXISTS idx_refresh_tokens_family_status
-			 ON refresh_tokens (family_id, status)`,
-
-			`CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_status
-			 ON refresh_tokens (user_id, status)`,
-
-			`CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires_at
-			 ON refresh_tokens (expires_at)`,
-
-			`CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_created
-			 ON audit_logs (actor_user_id, created_at DESC)`,
-
-			`CREATE INDEX IF NOT EXISTS idx_audit_logs_resource_created
-			 ON audit_logs (resource_type, resource_id, created_at DESC)`,
-
-			`CREATE INDEX IF NOT EXISTS idx_workspaces_host_id
-			 ON workspaces (host_id)`,
-
-			`CREATE INDEX IF NOT EXISTS idx_workspaces_active
-			 ON workspaces (host_id)
-			 WHERE deleted_at IS NULL`,
-
-			`CREATE INDEX IF NOT EXISTS idx_workspace_members_workspace_id
-			 ON workspace_members (workspace_id)`,
-
-			`CREATE INDEX IF NOT EXISTS idx_workspace_members_user_id
-			 ON workspace_members (user_id)`,
-
-			`CREATE INDEX IF NOT EXISTS idx_documents_workspace_id
-			 ON documents (workspace_id)
-			 WHERE deleted_at IS NULL`,
-
-			`CREATE INDEX IF NOT EXISTS idx_documents_workspace_updated
-			 ON documents (workspace_id, updated_at DESC)
-			 WHERE deleted_at IS NULL`,
-
-			`CREATE INDEX IF NOT EXISTS idx_document_versions_document_created
-			 ON document_versions (document_id, created_at DESC)`,
-
-			`ALTER TABLE refresh_tokens DROP CONSTRAINT IF EXISTS chk_refresh_tokens_status`,
-			`ALTER TABLE refresh_tokens ADD CONSTRAINT chk_refresh_tokens_status
-			 CHECK (status IN ('active','rotated','revoked','expired'))`,
-		}
-
-		for _, statement := range statements {
-			if err := tx.Exec(statement).Error; err != nil {
+		for _, statement := range migrationStatements {
+			if err := execMigrationSQL(tx, statement); err != nil {
 				return fmt.Errorf("apply migration statement: %w", err)
 			}
 		}
 
 		return nil
 	})
+}
+
+var migrationStatements = []string{
+	`CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email_active
+	 ON users (LOWER(email))
+	 WHERE deleted_at IS NULL`,
+
+	`CREATE INDEX IF NOT EXISTS idx_users_status
+	 ON users (status)`,
+
+	`CREATE UNIQUE INDEX IF NOT EXISTS uq_refresh_tokens_hash
+	 ON refresh_tokens (token_hash)`,
+
+	`CREATE INDEX IF NOT EXISTS idx_refresh_tokens_family_status
+	 ON refresh_tokens (family_id, status)`,
+
+	`CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_status
+	 ON refresh_tokens (user_id, status)`,
+
+	`CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires_at
+	 ON refresh_tokens (expires_at)`,
+
+	`DO $$ BEGIN
+	 IF EXISTS (
+	   SELECT 1 FROM information_schema.columns
+	   WHERE table_schema = current_schema()
+	     AND table_name = 'audit_logs'
+	     AND column_name = 'actor_user_id'
+	 ) AND NOT EXISTS (
+	   SELECT 1 FROM information_schema.columns
+	   WHERE table_schema = current_schema()
+	     AND table_name = 'audit_logs'
+	     AND column_name = 'user_id'
+	 ) THEN
+	   ALTER TABLE audit_logs RENAME COLUMN actor_user_id TO user_id;
+	 ELSIF EXISTS (
+	   SELECT 1 FROM information_schema.columns
+	   WHERE table_schema = current_schema()
+	     AND table_name = 'audit_logs'
+	     AND column_name = 'actor_user_id'
+	 ) AND EXISTS (
+	   SELECT 1 FROM information_schema.columns
+	   WHERE table_schema = current_schema()
+	     AND table_name = 'audit_logs'
+	     AND column_name = 'user_id'
+	 ) THEN
+	   UPDATE audit_logs SET user_id = actor_user_id WHERE user_id IS NULL AND actor_user_id IS NOT NULL;
+	   ALTER TABLE audit_logs DROP COLUMN actor_user_id;
+	 END IF;
+	 END $$`,
+	`ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS target_user_id UUID`,
+	`ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS workspace_id UUID`,
+	`ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS document_id UUID`,
+	`DROP INDEX IF EXISTS idx_audit_logs_actor_created`,
+	`CREATE INDEX IF NOT EXISTS idx_audit_logs_user_created
+	 ON audit_logs (user_id, created_at DESC)`,
+
+	`CREATE INDEX IF NOT EXISTS idx_audit_logs_resource_created
+	 ON audit_logs (resource_type, resource_id, created_at DESC)`,
+
+	`CREATE INDEX IF NOT EXISTS idx_workspaces_host_id
+	 ON workspaces (host_id)`,
+
+	`CREATE INDEX IF NOT EXISTS idx_workspaces_active
+	 ON workspaces (host_id)
+	 WHERE deleted_at IS NULL`,
+
+	`CREATE INDEX IF NOT EXISTS idx_workspace_members_workspace_id
+	 ON workspace_members (workspace_id)`,
+
+	`CREATE INDEX IF NOT EXISTS idx_workspace_members_user_id
+	 ON workspace_members (user_id)`,
+
+	`CREATE INDEX IF NOT EXISTS idx_documents_workspace_id
+	 ON documents (workspace_id)
+	 WHERE deleted_at IS NULL`,
+
+	`CREATE INDEX IF NOT EXISTS idx_documents_workspace_updated
+	 ON documents (workspace_id, updated_at DESC)
+	 WHERE deleted_at IS NULL`,
+
+	`CREATE INDEX IF NOT EXISTS idx_document_versions_document_created
+	 ON document_versions (document_id, created_at DESC)`,
+
+	`ALTER TABLE refresh_tokens DROP CONSTRAINT IF EXISTS chk_refresh_tokens_status`,
+	`ALTER TABLE refresh_tokens ADD CONSTRAINT chk_refresh_tokens_status
+	 CHECK (status IN ('active','rotated','revoked','expired'))`,
 }

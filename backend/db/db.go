@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
@@ -14,11 +13,11 @@ func Open(databaseURL string) (*gorm.DB, error) {
 	if databaseURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL is empty")
 	}
-	gdb, err := gorm.Open(postgres.Open(databaseURL), &gorm.Config{})
+	gdb, err := openGormDBFn(databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("open postgres: %w", err)
 	}
-	sqlDB, err := gdb.DB()
+	sqlDB, err := getSQLDBFn(gdb)
 	if err != nil {
 		return nil, fmt.Errorf("get sql db: %w", err)
 	}
@@ -30,7 +29,7 @@ func Open(databaseURL string) (*gorm.DB, error) {
 }
 
 func Ping(ctx context.Context, gdb *gorm.DB) error {
-	sqlDB, err := gdb.DB()
+	sqlDB, err := getSQLDBFn(gdb)
 	if err != nil {
 		return err
 	}
@@ -38,11 +37,11 @@ func Ping(ctx context.Context, gdb *gorm.DB) error {
 }
 
 func Close(gdb *gorm.DB) error {
-	sqlDB, err := gdb.DB()
+	sqlDB, err := getSQLDBFn(gdb)
 	if err != nil {
 		return err
 	}
 	return sqlDB.Close()
 }
 
-func SQLDB(gdb *gorm.DB) (*sql.DB, error) { return gdb.DB() }
+func SQLDB(gdb *gorm.DB) (*sql.DB, error) { return getSQLDBFn(gdb) }

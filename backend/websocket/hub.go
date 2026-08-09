@@ -7,17 +7,30 @@ import (
 )
 
 type Hub struct {
-	mu        sync.RWMutex
-	documents map[uuid.UUID]map[*Client]struct{}
+	mu                sync.RWMutex
+	documents         map[uuid.UUID]map[*Client]struct{}
+	workspaceWatchers map[uuid.UUID]map[*Client]struct{}
 }
 
 func NewHub() *Hub {
-	return &Hub{documents: make(map[uuid.UUID]map[*Client]struct{})}
+	return &Hub{
+		documents:         make(map[uuid.UUID]map[*Client]struct{}),
+		workspaceWatchers: make(map[uuid.UUID]map[*Client]struct{}),
+	}
 }
 
 func (h *Hub) Register(client *Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if client.DocumentID == uuid.Nil {
+		clients := h.workspaceWatchers[client.WorkspaceID]
+		if clients == nil {
+			clients = make(map[*Client]struct{})
+			h.workspaceWatchers[client.WorkspaceID] = clients
+		}
+		clients[client] = struct{}{}
+		return
+	}
 	clients := h.documents[client.DocumentID]
 	if clients == nil {
 		clients = make(map[*Client]struct{})
@@ -29,6 +42,17 @@ func (h *Hub) Register(client *Client) {
 func (h *Hub) Unregister(client *Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if client.DocumentID == uuid.Nil {
+		clients := h.workspaceWatchers[client.WorkspaceID]
+		if clients == nil {
+			return
+		}
+		delete(clients, client)
+		if len(clients) == 0 {
+			delete(h.workspaceWatchers, client.WorkspaceID)
+		}
+		return
+	}
 	clients := h.documents[client.DocumentID]
 	if clients == nil {
 		return
@@ -36,6 +60,23 @@ func (h *Hub) Unregister(client *Client) {
 	delete(clients, client)
 	if len(clients) == 0 {
 		delete(h.documents, client.DocumentID)
+	}
+}
+
+func (h *Hub) BroadcastWorkspace(workspaceID uuid.UUID, payload []byte) {
+	h.mu.RLock()
+	clients := h.workspaceWatchers[workspaceID]
+	targets := make([]*Client, 0, len(clients))
+	for client := range clients {
+		if !client.Ready.Load() {
+			continue
+		}
+		targets = append(targets, client)
+	}
+	h.mu.RUnlock()
+
+	for _, client := range targets {
+		client.TrySend(payload)
 	}
 }
 
@@ -112,6 +153,13 @@ func (h *Hub) DisconnectWorkspace(workspaceID uuid.UUID, payload []byte) {
 			delete(h.documents, documentID)
 		}
 	}
+	for client := range h.workspaceWatchers[workspaceID] {
+		if !client.Ready.Load() {
+			continue
+		}
+		targets = append(targets, client)
+	}
+	delete(h.workspaceWatchers, workspaceID)
 	h.mu.Unlock()
 
 	for _, client := range targets {

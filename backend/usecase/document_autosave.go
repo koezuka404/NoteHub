@@ -168,14 +168,14 @@ func (uc *DocumentAutoSaveUseCase) persistDocument(
 		if lockedDoc.IsDeleted() {
 			return ErrDocumentDeleted
 		}
-		if err := lockedDoc.ReplaceContent(state.Content, state.UpdatedBy, lockedDoc.Revision, state.UpdatedAt.UTC()); err != nil {
+		if err := replaceDocumentContentFn(lockedDoc, state.Content, state.UpdatedBy, lockedDoc.Revision, state.UpdatedAt.UTC()); err != nil {
 			return err
 		}
 		if err := uc.docs.Update(txCtx, lockedDoc); err != nil {
 			return fmt.Errorf("update document content: %w", err)
 		}
 
-		version, err := entity.NewDocumentVersion(
+		version, err := newDocumentVersionFn(
 			*lockedDoc,
 			state.Content,
 			versionType,

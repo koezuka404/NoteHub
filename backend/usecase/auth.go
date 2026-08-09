@@ -190,27 +190,39 @@ func (uc *AuthUseCase) Login(ctx context.Context, input LoginInput) (*LoginOutpu
 	if err != nil {
 		return nil, fmt.Errorf("generate refresh token: %w", err)
 	}
-	refresh, err := entity.NewRefreshToken(user.ID, uc.auth.HashToken(rawRefresh), uuid.New(), now.Add(uc.refreshTokenTTL), now)
-	if err != nil {
-		return nil, fmt.Errorf("create refresh token entity: %w", err)
-	}
-	refresh.IPAddress = input.IPAddress
-	refresh.UserAgent = input.UserAgent
-	if err := uc.refreshTokens.Create(ctx, &refresh); err != nil {
-		return nil, fmt.Errorf("save refresh token: %w", err)
-	}
 	csrfToken, err := uc.auth.GenerateCSRFToken()
 	if err != nil {
 		return nil, fmt.Errorf("generate csrf token: %w", err)
 	}
-	if err := uc.recordLoginSuccessAudit(ctx, user.ID, input, now); err != nil {
+
+	var output *LoginOutput
+	if err := uc.transactions.WithinTransaction(ctx, func(txCtx context.Context) error {
+		refresh, err := newRefreshTokenEntityFn(user.ID, uc.auth.HashToken(rawRefresh), uuid.New(), now.Add(uc.refreshTokenTTL), now)
+		if err != nil {
+			return fmt.Errorf("create refresh token entity: %w", err)
+		}
+		refresh.IPAddress = input.IPAddress
+		refresh.UserAgent = input.UserAgent
+		if err := uc.refreshTokens.Create(txCtx, &refresh); err != nil {
+			return fmt.Errorf("save refresh token: %w", err)
+		}
+		if err := uc.recordLoginSuccessAudit(txCtx, user.ID, input, now); err != nil {
+			return err
+		}
+		output = &LoginOutput{
+			User:         LoginUserOutput{ID: user.ID, Name: user.Name, Email: user.Email, Status: user.Status},
+			AccessToken:  accessToken,
+			RefreshToken: rawRefresh,
+			CSRFToken:    csrfToken,
+			TokenType:    "Bearer",
+			ExpiresAt:    expiresAt.Format(timeFormat),
+		}
+		return nil
+	}); err != nil {
 		return nil, err
 	}
 
-	return &LoginOutput{
-		User:        LoginUserOutput{ID: user.ID, Name: user.Name, Email: user.Email, Status: user.Status},
-		AccessToken: accessToken, RefreshToken: rawRefresh, CSRFToken: csrfToken, TokenType: "Bearer", ExpiresAt: expiresAt.Format(timeFormat),
-	}, nil
+	return output, nil
 }
 
 func (uc *AuthUseCase) handleAuthFailure(
@@ -237,7 +249,7 @@ func (uc *AuthUseCase) recordLoginSuccessAudit(ctx context.Context, userID uuid.
 	if uc.auditLogs == nil {
 		return nil
 	}
-	audit, err := entity.NewAuditLog(&userID, "LOGIN", "user", &userID, nil, now)
+	audit, err := newAuditLogFn(&userID, "LOGIN", "user", &userID, nil, now)
 	if err != nil {
 		return fmt.Errorf("create login success audit log entity: %w", err)
 	}
@@ -258,7 +270,7 @@ func (uc *AuthUseCase) recordLoginRateLimitedAudit(
 	if uc.auditLogs == nil {
 		return
 	}
-	audit, err := entity.NewAuditLog(actorUserID, "LOGIN_RATE_LIMITED", "user", resourceUserID, nil, uc.now().UTC())
+	audit, err := newAuditLogFn(actorUserID, "LOGIN_RATE_LIMITED", "user", resourceUserID, nil, uc.now().UTC())
 	if err != nil {
 		return
 	}
@@ -278,7 +290,7 @@ func (uc *AuthUseCase) recordLoginFailedAudit(
 		return
 	}
 	metadata := map[string]string{"reason": reason}
-	audit, err := entity.NewAuditLog(actorUserID, "LOGIN_FAILED", "user", resourceUserID, metadata, uc.now().UTC())
+	audit, err := newAuditLogFn(actorUserID, "LOGIN_FAILED", "user", resourceUserID, metadata, uc.now().UTC())
 	if err != nil {
 		return
 	}
@@ -324,32 +336,38 @@ func (uc *AuthUseCase) Register(ctx context.Context, input RegisterInput) (*Regi
 	}
 
 	now := uc.now().UTC()
-	user, err := entity.NewUser(strings.TrimSpace(input.Name), email, passwordHash, now)
+	user, err := newUserFn(strings.TrimSpace(input.Name), email, passwordHash, now)
 	if err != nil {
 		return nil, fmt.Errorf("create user entity: %w", err)
 	}
 
-	if err := uc.users.Create(ctx, &user); err != nil {
-		return nil, fmt.Errorf("create user: %w", err)
+	var output *RegisterOutput
+	if err := uc.transactions.WithinTransaction(ctx, func(txCtx context.Context) error {
+		if err := uc.users.Create(txCtx, &user); err != nil {
+			return fmt.Errorf("create user: %w", err)
+		}
+		actorID := user.ID
+		auditLog, err := newAuditLogFn(&actorID, "USER_REGISTERED", "user", &user.ID, nil, now)
+		if err != nil {
+			return fmt.Errorf("create audit log entity: %w", err)
+		}
+		auditLog.IPAddress = input.IPAddress
+		if err := uc.auditLogs.Create(txCtx, &auditLog); err != nil {
+			return fmt.Errorf("create audit log: %w", err)
+		}
+		output = &RegisterOutput{
+			ID:        user.ID,
+			Name:      user.Name,
+			Email:     user.Email,
+			Status:    user.Status,
+			CreatedAt: user.CreatedAt.Format(timeFormat),
+		}
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 
-	actorID := user.ID
-	auditLog, err := entity.NewAuditLog(&actorID, "USER_REGISTERED", "user", &user.ID, nil, now)
-	if err != nil {
-		return nil, fmt.Errorf("create audit log entity: %w", err)
-	}
-	auditLog.IPAddress = input.IPAddress
-	if err := uc.auditLogs.Create(ctx, &auditLog); err != nil {
-		return nil, fmt.Errorf("create audit log: %w", err)
-	}
-
-	return &RegisterOutput{
-		ID:        user.ID,
-		Name:      user.Name,
-		Email:     user.Email,
-		Status:    user.Status,
-		CreatedAt: user.CreatedAt.Format(timeFormat),
-	}, nil
+	return output, nil
 }
 
 // auth_refresh.go
@@ -394,6 +412,18 @@ func (uc *AuthUseCase) Refresh(ctx context.Context, input RefreshInput) (*Refres
 			if err := uc.users.IncrementAuthVersion(txCtx, current.UserID, now); err != nil {
 				return fmt.Errorf("increment auth version: %w", err)
 			}
+			if uc.auditLogs != nil {
+				userID := current.UserID
+				audit, err := newAuditLogFn(&userID, "REFRESH_TOKEN_REUSED", "user", &userID, nil, now)
+				if err != nil {
+					return fmt.Errorf("create refresh token reused audit log entity: %w", err)
+				}
+				audit.IPAddress = input.IPAddress
+				audit.UserAgent = input.UserAgent
+				if err := uc.auditLogs.Create(txCtx, &audit); err != nil {
+					return fmt.Errorf("save refresh token reused audit log: %w", err)
+				}
+			}
 			reused = true
 			return nil
 		}
@@ -419,7 +449,7 @@ func (uc *AuthUseCase) Refresh(ctx context.Context, input RefreshInput) (*Refres
 		if err != nil {
 			return fmt.Errorf("generate next refresh token: %w", err)
 		}
-		next, err := entity.NewRefreshToken(user.ID, uc.auth.HashToken(rawNext), current.FamilyID, now.Add(uc.refreshTokenTTL), now)
+		next, err := newRefreshTokenEntityFn(user.ID, uc.auth.HashToken(rawNext), current.FamilyID, now.Add(uc.refreshTokenTTL), now)
 		if err != nil {
 			return fmt.Errorf("create next refresh token: %w", err)
 		}
@@ -428,7 +458,7 @@ func (uc *AuthUseCase) Refresh(ctx context.Context, input RefreshInput) (*Refres
 		if err := uc.refreshTokens.Create(txCtx, &next); err != nil {
 			return fmt.Errorf("save next refresh token: %w", err)
 		}
-		if err := current.Rotate(next.ID, now); err != nil {
+		if err := rotateRefreshTokenFn(current, next.ID, now); err != nil {
 			return ErrRefreshTokenRevoked
 		}
 		if err := uc.refreshTokens.Update(txCtx, current); err != nil {
@@ -493,7 +523,7 @@ func (uc *AuthUseCase) Logout(ctx context.Context, input LogoutInput) (*LogoutOu
 					return ErrTokenOwnerMismatch
 				}
 				if token.Status == entity.RefreshTokenStatusActive || token.Status == entity.RefreshTokenStatusRotated {
-					if err := token.Revoke(now); err != nil {
+					if err := revokeRefreshTokenFn(token, now); err != nil {
 						return fmt.Errorf("revoke refresh token: %w", err)
 					}
 					if err := uc.refreshTokens.Update(txCtx, token); err != nil {
@@ -504,7 +534,7 @@ func (uc *AuthUseCase) Logout(ctx context.Context, input LogoutInput) (*LogoutOu
 		}
 
 		if uc.auditLogs != nil {
-			audit, err := entity.NewAuditLog(&input.UserID, "LOGOUT", "user", &input.UserID, nil, now)
+			audit, err := newAuditLogFn(&input.UserID, "LOGOUT", "user", &input.UserID, nil, now)
 			if err != nil {
 				return fmt.Errorf("create logout audit log: %w", err)
 			}

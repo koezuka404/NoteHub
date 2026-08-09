@@ -30,7 +30,7 @@ func (b *BackupBatch) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			runCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
-			if err := b.backup.RunOnce(runCtx); err != nil {
+			if err := runBackupOnce(b, runCtx); err != nil {
 				log.Printf("backup batch: %v", err)
 			}
 			cancel()

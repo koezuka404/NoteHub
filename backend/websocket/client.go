@@ -12,8 +12,17 @@ import (
 const (
 	writeWait  = 10 * time.Second
 	pongWait   = 60 * time.Second
-	pingPeriod = (pongWait * 9) / 10
 	maxMessage = 512 * 1024
+)
+
+var pingPeriodDuration = (pongWait * 9) / 10
+
+var (
+	connSetWriteDeadline = func(c *gorillaws.Conn, t time.Time) error { return c.SetWriteDeadline(t) }
+	connWriteMessage     = func(c *gorillaws.Conn, messageType int, data []byte) error {
+		return c.WriteMessage(messageType, data)
+	}
+	connSetReadDeadline = func(c *gorillaws.Conn, t time.Time) error { return c.SetReadDeadline(t) }
 )
 
 type Client struct {
@@ -44,7 +53,7 @@ func (c *Client) TrySend(payload []byte) {
 }
 
 func (c *Client) WritePump() {
-	ticker := time.NewTicker(pingPeriod)
+	ticker := time.NewTicker(pingPeriodDuration)
 	defer func() {
 		ticker.Stop()
 		c.Close()
@@ -53,21 +62,21 @@ func (c *Client) WritePump() {
 	for {
 		select {
 		case message, ok := <-c.Send:
-			if err := c.Conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+			if err := connSetWriteDeadline(c.Conn, time.Now().Add(writeWait)); err != nil {
 				return
 			}
 			if !ok {
-				_ = c.Conn.WriteMessage(gorillaws.CloseMessage, []byte{})
+				_ = connWriteMessage(c.Conn, gorillaws.CloseMessage, []byte{})
 				return
 			}
-			if err := c.Conn.WriteMessage(gorillaws.TextMessage, message); err != nil {
+			if err := connWriteMessage(c.Conn, gorillaws.TextMessage, message); err != nil {
 				return
 			}
 		case <-ticker.C:
-			if err := c.Conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+			if err := connSetWriteDeadline(c.Conn, time.Now().Add(writeWait)); err != nil {
 				return
 			}
-			if err := c.Conn.WriteMessage(gorillaws.PingMessage, nil); err != nil {
+			if err := connWriteMessage(c.Conn, gorillaws.PingMessage, nil); err != nil {
 				return
 			}
 		}
@@ -83,11 +92,11 @@ func (c *Client) ReadPump(onMessage func(*Client, []byte), onClose func(*Client)
 		c.Close()
 	}()
 
-	if err := c.Conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+	if err := connSetReadDeadline(c.Conn, time.Now().Add(pongWait)); err != nil {
 		return
 	}
 	c.Conn.SetPongHandler(func(string) error {
-		return c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+		return connSetReadDeadline(c.Conn, time.Now().Add(pongWait))
 	})
 	c.Conn.SetReadLimit(maxMessage)
 

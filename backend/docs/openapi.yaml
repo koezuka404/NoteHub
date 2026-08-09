@@ -2,4 +2,1547 @@ openapi: 3.0.3
 info:
   title: NoteHub API
   version: "0.1.0"
-paths: {}
+  description: |
+    NoteHub REST API および WebSocket 仕様。
+
+    ## 認証
+    - Access Token: `Authorization: Bearer <token>` ヘッダー（15分有効）
+    - Refresh Token: HttpOnly Cookie `notehub_refresh_token`（`/api/auth` パス）
+    - CSRF: Cookie `notehub_csrf_token` と Header `X-CSRF-Token` の Double Submit（`POST /api/auth/refresh`, `POST /api/auth/logout`）
+
+    ## レスポンス形式
+    成功時は `{ "data": ... }`、失敗時は `{ "error": { "code", "message", "requestId?" } }`。
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: http://localhost:8082
+    description: Local integration test
+
+tags:
+  - name: Health
+  - name: Auth
+  - name: Workspace
+  - name: Member
+  - name: Account
+  - name: Document
+  - name: Version
+  - name: WebSocket
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: ヘルスチェック
+      operationId: getHealth
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: ユーザー登録
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/RegisterResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: ログイン
+      operationId: login
+      description: |
+        成功時、`notehub_refresh_token` と `notehub_csrf_token` Cookie を Set-Cookie する。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: OK
+          headers:
+            Set-Cookie:
+              description: Refresh / CSRF Cookie
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/LoginResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Access Token 再発行
+      operationId: refresh
+      description: Refresh Token Cookie と CSRF Header が必要。
+      parameters:
+        - $ref: "#/components/parameters/CsrfHeader"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/RefreshResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: ログアウト
+      operationId: logout
+      security:
+        - bearerAuth: []
+        - csrfHeader: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/LogoutResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/me:
+    get:
+      tags: [Auth]
+      summary: 現在のユーザー取得
+      operationId: getMe
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/MeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/workspaces:
+    get:
+      tags: [Workspace]
+      summary: ワークスペース一覧
+      operationId: listWorkspaces
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/WorkspaceListItem"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Workspace]
+      summary: ワークスペース作成
+      operationId: createWorkspace
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWorkspaceRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CreateWorkspaceResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/workspaces/{workspaceId}:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+    get:
+      tags: [Workspace]
+      summary: ワークスペース詳細
+      operationId: getWorkspace
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/GetWorkspaceResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/WorkspaceForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Workspace]
+      summary: ワークスペース更新（ホストのみ）
+      operationId: updateWorkspace
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateWorkspaceRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/UpdateWorkspaceResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/WorkspaceForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    delete:
+      tags: [Workspace]
+      summary: ワークスペース削除（ホストのみ）
+      operationId: deleteWorkspace
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteWorkspaceRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeleteWorkspaceResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/WorkspaceForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/workspaces/{workspaceId}/members:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+    get:
+      tags: [Member]
+      summary: メンバー一覧
+      operationId: listMembers
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Member"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/WorkspaceForbidden"
+    post:
+      tags: [Member]
+      summary: メンバー追加（ホストのみ）
+      operationId: addMember
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddMemberRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AddMemberResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/WorkspaceForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/workspaces/{workspaceId}/members/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+      - $ref: "#/components/parameters/UserId"
+    delete:
+      tags: [Member]
+      summary: メンバー削除（ホストのみ）
+      operationId: removeMember
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        additionalProperties: false
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/WorkspaceForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/workspaces/{workspaceId}/users/search:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+      - name: email
+        in: query
+        required: true
+        schema:
+          type: string
+          format: email
+    get:
+      tags: [Member]
+      summary: ユーザー検索（ホストのみ）
+      operationId: searchUser
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SearchUserResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/WorkspaceForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/workspaces/{workspaceId}/members/{userId}/suspend:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+      - $ref: "#/components/parameters/UserId"
+    post:
+      tags: [Account]
+      summary: アカウント停止（ホストのみ）
+      operationId: suspendAccount
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SuspendAccountResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/WorkspaceForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/workspaces/{workspaceId}/members/{userId}/reactivate:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+      - $ref: "#/components/parameters/UserId"
+    post:
+      tags: [Account]
+      summary: アカウント復帰（ホストのみ）
+      operationId: reactivateAccount
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ReactivateAccountResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/WorkspaceForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/workspaces/{workspaceId}/members/{userId}/delete-account:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+      - $ref: "#/components/parameters/UserId"
+    post:
+      tags: [Account]
+      summary: アカウント論理削除（ホストのみ）
+      operationId: deleteAccount
+      description: 仕様書では `/delete` パスだが、実装は `/delete-account`。
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeleteAccountResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/WorkspaceForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/workspaces/{workspaceId}/documents:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+    get:
+      tags: [Document]
+      summary: ドキュメント一覧
+      operationId: listDocuments
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/DocumentListItem"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/WorkspaceForbidden"
+    post:
+      tags: [Document]
+      summary: ドキュメント作成
+      operationId: createDocument
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDocumentRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CreateDocumentResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/WorkspaceForbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/documents/{documentId}:
+    parameters:
+      - $ref: "#/components/parameters/DocumentId"
+    get:
+      tags: [Document]
+      summary: ドキュメント取得
+      operationId: getDocument
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/GetDocumentResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/WorkspaceForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Document]
+      summary: ドキュメントタイトル更新
+      operationId: updateDocument
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDocumentRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/UpdateDocumentResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/WorkspaceForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    delete:
+      tags: [Document]
+      summary: ドキュメント削除
+      operationId: deleteDocument
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeleteDocumentResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/WorkspaceForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/documents/{documentId}/versions:
+    parameters:
+      - $ref: "#/components/parameters/DocumentId"
+    get:
+      tags: [Version]
+      summary: 編集履歴一覧
+      operationId: listVersions
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/VersionListItem"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/WorkspaceForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Version]
+      summary: 手動バージョン保存
+      operationId: saveManualVersion
+      security:
+        - bearerAuth: []
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SaveManualVersionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/WorkspaceForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/documents/{documentId}/versions/{versionId}:
+    parameters:
+      - $ref: "#/components/parameters/DocumentId"
+      - $ref: "#/components/parameters/VersionId"
+    get:
+      tags: [Version]
+      summary: 編集履歴詳細
+      operationId: getVersion
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/GetVersionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/WorkspaceForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/documents/{documentId}/versions/{versionId}/restore:
+    parameters:
+      - $ref: "#/components/parameters/DocumentId"
+      - $ref: "#/components/parameters/VersionId"
+    post:
+      tags: [Version]
+      summary: バージョン復元
+      operationId: restoreVersion
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/RestoreVersionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/WorkspaceForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /ws/documents/{documentId}:
+    get:
+      tags: [WebSocket]
+      summary: ドキュメント共同編集 WebSocket
+      operationId: connectDocumentWebSocket
+      description: |
+        HTTP GET で WebSocket にアップグレードする。
+
+        **認証**: クエリ `access_token` または `Authorization: Bearer` ヘッダー。
+
+        **サーバー → クライアント** (`{ type, data, timestamp }`):
+        - `connected` — 接続確立
+        - `document_sync` — 初期本文同期
+        - `document_updated` — 本文/タイトル更新（`content`, `title` は optional）
+        - `editors_sync`, `editor_joined`, `editor_left` — 編集者一覧
+        - `document_restored` — バージョン復元
+        - `document_deleted`, `workspace_deleted`, `account_suspended`, `account_deleted`,
+          `workspace_host_suspended`, `workspace_host_deleted`, `member_removed` — 終端イベント
+        - `error` — エラー
+
+        **クライアント → サーバー**:
+        - `document_edit` — `{ "data": { "content": "..." } }`
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+        - name: access_token
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "101":
+          description: Switching Protocols（WebSocket）
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: WebSocket 接続数上限
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ws/workspaces/{workspaceId}:
+    get:
+      tags: [WebSocket]
+      summary: ワークスペース一覧 WebSocket
+      operationId: connectWorkspaceWebSocket
+      description: |
+        ドキュメント一覧ページ向け。メンバーがワークスペース内のドキュメント変更を受信する。
+
+        **サーバー → クライアント**:
+        - `connected`
+        - `document_created` — 新規ドキュメント
+        - `document_updated` — タイトル更新（一覧向け）
+        - `document_deleted` — 削除
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - name: access_token
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "101":
+          description: Switching Protocols（WebSocket）
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access Token（15分有効、メモリ保持）
+    csrfHeader:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: CSRF Cookie `notehub_csrf_token` と同値
+
+  parameters:
+    WorkspaceId:
+      name: workspaceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    DocumentId:
+      name: documentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    VersionId:
+      name: versionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CsrfHeader:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Not Found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: Conflict
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    TooManyRequests:
+      description: Too Many Requests
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ServiceUnavailable:
+      description: Service Unavailable
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalError:
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    WorkspaceForbidden:
+      description: Workspace access or permission denied
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    ApiResponse:
+      type: object
+      required: [data]
+      properties:
+        data: {}
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: VALIDATION_ERROR
+            message:
+              type: string
+              example: 入力値が不正です
+            requestId:
+              type: string
+              format: uuid
+
+    AuthUser:
+      type: object
+      required: [id, name, email, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        status:
+          type: string
+          enum: [active, suspended, deleted]
+
+    RegisterRequest:
+      type: object
+      required: [name, email, password]
+      properties:
+        name:
+          type: string
+          maxLength: 50
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+          maxLength: 15
+          description: 英字と数字を含む
+
+    RegisterResponse:
+      type: object
+      required: [user, createdAt]
+      properties:
+        user:
+          $ref: "#/components/schemas/AuthUser"
+        createdAt:
+          type: string
+          format: date-time
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    LoginResponse:
+      type: object
+      required: [user, accessToken, tokenType, expiresAt]
+      properties:
+        user:
+          $ref: "#/components/schemas/AuthUser"
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          example: Bearer
+        expiresAt:
+          type: string
+          format: date-time
+
+    RefreshResponse:
+      type: object
+      required: [accessToken, tokenType, expiresAt]
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          example: Bearer
+        expiresAt:
+          type: string
+          format: date-time
+
+    LogoutResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    MeResponse:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: "#/components/schemas/AuthUser"
+
+    CreateWorkspaceRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+
+    CreateWorkspaceResponse:
+      type: object
+      required: [id, name, hostId, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        hostId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+
+    WorkspaceListItem:
+      type: object
+      required: [id, name, hostId, hostName, role, isAvailable, unavailableReason, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        hostId:
+          type: string
+          format: uuid
+        hostName:
+          type: string
+        role:
+          type: string
+          enum: [host, member]
+        isAvailable:
+          type: boolean
+        unavailableReason:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+
+    WorkspaceHost:
+      type: object
+      required: [id, name, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+          enum: [active, suspended, deleted]
+
+    GetWorkspaceResponse:
+      type: object
+      required: [id, name, host, role, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        host:
+          $ref: "#/components/schemas/WorkspaceHost"
+        role:
+          type: string
+          enum: [host, member]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    UpdateWorkspaceRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+
+    UpdateWorkspaceResponse:
+      type: object
+      required: [id, name, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+
+    DeleteWorkspaceRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+
+    DeleteWorkspaceResponse:
+      type: object
+      required: [workspaceId, deletedAt]
+      properties:
+        workspaceId:
+          type: string
+          format: uuid
+        deletedAt:
+          type: string
+          format: date-time
+
+    SearchUserResponse:
+      type: object
+      required: [id, email, name, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        status:
+          type: string
+          enum: [active, suspended, deleted]
+
+    Member:
+      type: object
+      required: [userId, name, email, status, role, joinedAt]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        status:
+          type: string
+          enum: [active, suspended, deleted]
+        role:
+          type: string
+          enum: [host, member]
+        joinedAt:
+          type: string
+          format: date-time
+
+    AddMemberRequest:
+      type: object
+      required: [userId]
+      properties:
+        userId:
+          type: string
+          format: uuid
+
+    AddMemberResponse:
+      type: object
+      required: [userId, name, email, role, joinedAt]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [member]
+        joinedAt:
+          type: string
+          format: date-time
+
+    SuspendAccountResponse:
+      type: object
+      required: [userId, status, suspendedAt]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          example: suspended
+        suspendedAt:
+          type: string
+          format: date-time
+
+    ReactivateAccountResponse:
+      type: object
+      required: [userId, status]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          example: active
+
+    DeleteAccountResponse:
+      type: object
+      required: [userId, status, deletedAt]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          example: deleted
+        deletedAt:
+          type: string
+          format: date-time
+
+    CreateDocumentRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          maxLength: 100
+        content:
+          type: string
+          maxLength: 524288
+
+    CreateDocumentResponse:
+      type: object
+      required: [id, workspaceId, title, content, createdBy, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspaceId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        content:
+          type: string
+        createdBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+
+    DocumentListItem:
+      type: object
+      required: [id, title, updatedBy, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        updatedBy:
+          type: string
+          format: uuid
+        updatedAt:
+          type: string
+          format: date-time
+
+    GetDocumentResponse:
+      type: object
+      required: [id, workspaceId, title, content, updatedBy, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspaceId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        content:
+          type: string
+        updatedBy:
+          type: string
+          format: uuid
+        updatedAt:
+          type: string
+          format: date-time
+
+    UpdateDocumentRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          maxLength: 100
+
+    UpdateDocumentResponse:
+      type: object
+      required: [id, title, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+
+    DeleteDocumentResponse:
+      type: object
+      required: [documentId, deletedAt]
+      properties:
+        documentId:
+          type: string
+          format: uuid
+        deletedAt:
+          type: string
+          format: date-time
+
+    VersionListItem:
+      type: object
+      required: [id, versionType, createdBy, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        versionType:
+          type: string
+          enum: [auto_save, manual_save, before_restore, restore]
+        createdBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+
+    GetVersionResponse:
+      type: object
+      required: [id, documentId, content, versionType, createdBy, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        documentId:
+          type: string
+          format: uuid
+        content:
+          type: string
+        versionType:
+          type: string
+          enum: [auto_save, manual_save, before_restore, restore]
+        createdBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+
+    SaveManualVersionResponse:
+      type: object
+      required: [id, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+
+    RestoreVersionResponse:
+      type: object
+      required: [documentId, versionId, restoredAt]
+      properties:
+        documentId:
+          type: string
+          format: uuid
+        versionId:
+          type: string
+          format: uuid
+        restoredAt:
+          type: string
+          format: date-time
+
+    WebSocketEnvelope:
+      type: object
+      required: [type, data, timestamp]
+      properties:
+        type:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+        timestamp:
+          type: string
+          format: date-time

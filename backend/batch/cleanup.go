@@ -30,7 +30,7 @@ func (b *CleanupBatch) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			runCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-			if err := b.cleanup.RunOnce(runCtx); err != nil {
+			if err := runCleanupOnce(b, runCtx); err != nil {
 				log.Printf("cleanup batch: %v", err)
 			}
 			cancel()

@@ -10,6 +10,7 @@ const (
 	EventDocumentSync     = "document_sync"
 	EventDocumentEdit     = "document_edit"
 	EventDocumentUpdated  = "document_updated"
+	EventDocumentCreated  = "document_created"
 	EventEditorJoined     = "editor_joined"
 	EventEditorLeft       = "editor_left"
 	EventEditorsSync      = "editors_sync"
@@ -40,8 +41,10 @@ type Envelope struct {
 	Timestamp string          `json:"timestamp"`
 }
 
+var jsonMarshalFn = json.Marshal
+
 func MarshalEvent(eventType string, data any, now time.Time) ([]byte, error) {
-	raw, err := json.Marshal(data)
+	raw, err := jsonMarshalFn(data)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +57,8 @@ func MarshalEvent(eventType string, data any, now time.Time) ([]byte, error) {
 
 type ConnectedData struct {
 	ConnectionID string `json:"connection_id"`
-	DocumentID   string `json:"document_id"`
+	DocumentID   string `json:"document_id,omitempty"`
+	WorkspaceID  string `json:"workspace_id,omitempty"`
 }
 
 type DocumentSyncData struct {
@@ -69,7 +73,15 @@ type DocumentEditData struct {
 
 type DocumentUpdatedData struct {
 	DocumentID string `json:"document_id"`
-	Content    string `json:"content"`
+	Content    string `json:"content,omitempty"`
+	Title      string `json:"title,omitempty"`
+	UpdatedBy  string `json:"updated_by"`
+	UpdatedAt  string `json:"updated_at"`
+}
+
+type DocumentListEventData struct {
+	DocumentID string `json:"document_id"`
+	Title      string `json:"title"`
 	UpdatedBy  string `json:"updated_by"`
 	UpdatedAt  string `json:"updated_at"`
 }

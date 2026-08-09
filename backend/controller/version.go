@@ -22,11 +22,11 @@ func NewVersionController(version usecase.IVersionUsecase) *VersionController {
 func (c *VersionController) List(e echo.Context) error {
 	userID, err := authenticatedUserID(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	documentID, err := parseDocumentIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	ctx := e.Request().Context()
 	items, err := c.version.ListVersions(ctx, usecase.ListVersionsInput{
@@ -48,15 +48,15 @@ func (c *VersionController) List(e echo.Context) error {
 func (c *VersionController) Get(e echo.Context) error {
 	userID, err := authenticatedUserID(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	documentID, err := parseDocumentIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	versionID, err := parseVersionIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	ctx := e.Request().Context()
 	out, err := c.version.GetVersion(ctx, usecase.GetVersionInput{
@@ -74,11 +74,11 @@ func (c *VersionController) Get(e echo.Context) error {
 func (c *VersionController) Save(e echo.Context) error {
 	userID, err := authenticatedUserID(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	documentID, err := parseDocumentIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	ctx := e.Request().Context()
 	out, err := c.version.SaveManualVersion(ctx, usecase.SaveManualVersionInput{
@@ -95,15 +95,15 @@ func (c *VersionController) Save(e echo.Context) error {
 func (c *VersionController) Restore(e echo.Context) error {
 	userID, err := authenticatedUserID(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	documentID, err := parseDocumentIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	versionID, err := parseVersionIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	ctx := e.Request().Context()
 	out, err := c.version.RestoreVersion(ctx, usecase.RestoreVersionInput{
@@ -123,7 +123,8 @@ func parseVersionIDParam(e echo.Context) (uuid.UUID, error) {
 	raw := e.Param("versionId")
 	id, err := uuid.Parse(raw)
 	if err != nil {
-		return uuid.Nil, writeWorkspaceError(e, http.StatusBadRequest, "INVALID_REQUEST", "バージョンIDが不正です")
+		_ = writeWorkspaceError(e, http.StatusBadRequest, "INVALID_REQUEST", "バージョンIDが不正です")
+		return uuid.Nil, errResponseSent
 	}
 	return id, nil
 }

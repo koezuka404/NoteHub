@@ -1,1 +1,21 @@
 .DS_Store
+
+# Dependencies
+node_modules/
+
+# Frontend build & test artifacts
+frontend/dist/
+frontend/coverage/
+
+# Go test coverage
+*.out
+
+# Environment
+.env
+.env.*
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+*~

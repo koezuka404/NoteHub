@@ -44,12 +44,12 @@ func (s *CleanupStore) cleanupPattern(ctx context.Context, pattern string) (int,
 	iter := s.client.Scan(ctx, 0, pattern, 100).Iterator()
 	for iter.Next(ctx) {
 		key := iter.Val()
-		ttl, err := s.client.TTL(ctx, key).Result()
+		ttl, err := readCleanupKeyTTLFn(s.client, ctx, key)
 		if err != nil {
 			return removed, fmt.Errorf("read ttl for %s: %w", key, err)
 		}
 		if ttl == -1 {
-			if err := s.client.Del(ctx, key).Err(); err != nil {
+			if err := deleteCleanupKeyFn(s.client, ctx, key); err != nil {
 				return removed, fmt.Errorf("delete key without ttl %s: %w", key, err)
 			}
 			removed++
@@ -61,12 +61,12 @@ func (s *CleanupStore) cleanupPattern(ctx context.Context, pattern string) (int,
 		if !isWebSocketConnectionsKey(key) {
 			continue
 		}
-		count, err := s.client.SCard(ctx, key).Result()
+		count, err := countCleanupSetMembersFn(s.client, ctx, key)
 		if err != nil {
 			return removed, fmt.Errorf("count websocket connections for %s: %w", key, err)
 		}
 		if count == 0 {
-			if err := s.client.Del(ctx, key).Err(); err != nil {
+			if err := deleteCleanupKeyFn(s.client, ctx, key); err != nil {
 				return removed, fmt.Errorf("delete empty websocket key %s: %w", key, err)
 			}
 			removed++

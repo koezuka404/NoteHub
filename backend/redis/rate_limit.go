@@ -148,20 +148,7 @@ func (s *TokenBucketStore) Allow(ctx context.Context, key string, capacity int, 
 		return false, 0, fmt.Errorf("invalid token bucket configuration")
 	}
 
-	bucketTTL := time.Duration(math.Ceil(float64(capacity)/refillPerSecond*2)) * time.Second
-	if bucketTTL < time.Minute {
-		bucketTTL = time.Minute
-	}
-	redisKey := rateLimitPrefix + hashKey(key)
-	ctx, cancel := s.client.withTimeout(ctx)
-	defer cancel()
-	result, err := tokenBucketScript.Run(ctx, s.client.client, []string{redisKey},
-		capacity,
-		strconv.FormatFloat(refillPerSecond, 'f', -1, 64),
-		now.UnixMilli(),
-		1,
-		bucketTTL.Milliseconds(),
-	).Slice()
+	result, err := runTokenBucketScriptFn(ctx, s, key, capacity, refillPerSecond, now)
 	if err != nil {
 		return false, 0, fmt.Errorf("apply token bucket: %w", err)
 	}
@@ -177,6 +164,32 @@ func (s *TokenBucketStore) Allow(ctx context.Context, key string, capacity int, 
 		return false, 0, err
 	}
 	return allowed == 1, time.Duration(retryMS) * time.Millisecond, nil
+}
+
+func init() {
+	runTokenBucketScriptFn = func(
+		ctx context.Context,
+		store *TokenBucketStore,
+		key string,
+		capacity int,
+		refillPerSecond float64,
+		now time.Time,
+	) ([]any, error) {
+		bucketTTL := time.Duration(math.Ceil(float64(capacity)/refillPerSecond*2)) * time.Second
+		if bucketTTL < time.Minute {
+			bucketTTL = time.Minute
+		}
+		redisKey := rateLimitPrefix + hashKey(key)
+		ctx, cancel := store.client.withTimeout(ctx)
+		defer cancel()
+		return tokenBucketScript.Run(ctx, store.client.client, []string{redisKey},
+			capacity,
+			strconv.FormatFloat(refillPerSecond, 'f', -1, 64),
+			now.UnixMilli(),
+			1,
+			bucketTTL.Milliseconds(),
+		).Slice()
+	}
 }
 
 func hashKey(value string) string {

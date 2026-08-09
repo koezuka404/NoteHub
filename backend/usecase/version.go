@@ -24,6 +24,7 @@ type VersionUseCase struct {
 	access       IAccessCheck
 	cache        IDocumentCache
 	notifier     IDocumentWebSocketNotifier
+	auditLogs    repository.AuditLogRepository
 	now          func() time.Time
 }
 
@@ -34,6 +35,7 @@ func NewVersionUseCase(
 	access IAccessCheck,
 	cache IDocumentCache,
 	notifier IDocumentWebSocketNotifier,
+	auditLogs repository.AuditLogRepository,
 ) *VersionUseCase {
 	return &VersionUseCase{
 		docs:         docs,
@@ -42,6 +44,7 @@ func NewVersionUseCase(
 		access:       access,
 		cache:        cache,
 		notifier:     notifier,
+		auditLogs:    auditLogs,
 		now:          time.Now,
 	}
 }
@@ -98,7 +101,7 @@ func (uc *VersionUseCase) CreateVersion(ctx context.Context, input CreateVersion
 	}
 
 	now := uc.currentTime()
-	version, err := entity.NewDocumentVersion(*doc, input.Content, input.VersionType, input.CreatedBy, nil, now)
+	version, err := newDocumentVersionFn(*doc, input.Content, input.VersionType, input.CreatedBy, nil, now)
 	if err != nil {
 		return fmt.Errorf("create document version entity: %w", err)
 	}
@@ -151,7 +154,7 @@ func (uc *VersionUseCase) SaveManualVersion(ctx context.Context, input SaveManua
 		}
 
 		if locked.Content != content {
-			if err := locked.ReplaceContent(content, input.UserID, locked.Revision, now); err != nil {
+			if err := replaceDocumentContentFn(locked, content, input.UserID, locked.Revision, now); err != nil {
 				return err
 			}
 			if err := uc.docs.Update(txCtx, locked); err != nil {
@@ -159,7 +162,7 @@ func (uc *VersionUseCase) SaveManualVersion(ctx context.Context, input SaveManua
 			}
 		}
 
-		version, err := entity.NewDocumentVersion(*locked, content, entity.DocumentVersionManualSave, input.UserID, nil, now)
+		version, err := newDocumentVersionFn(*locked, content, entity.DocumentVersionManualSave, input.UserID, nil, now)
 		if err != nil {
 			return fmt.Errorf("create manual save version entity: %w", err)
 		}
@@ -324,7 +327,7 @@ func (uc *VersionUseCase) RestoreVersion(ctx context.Context, input RestoreVersi
 			return ErrDocumentDeleted
 		}
 
-		before, err := entity.NewDocumentVersion(*locked, currentContent, entity.DocumentVersionBeforeRestore, input.UserID, nil, now)
+		before, err := newDocumentVersionFn(*locked, currentContent, entity.DocumentVersionBeforeRestore, input.UserID, nil, now)
 		if err != nil {
 			return fmt.Errorf("create before_restore version: %w", err)
 		}
@@ -332,19 +335,39 @@ func (uc *VersionUseCase) RestoreVersion(ctx context.Context, input RestoreVersi
 			return fmt.Errorf("save before_restore version: %w", err)
 		}
 
-		if err := locked.ReplaceContent(target.Content, input.UserID, locked.Revision, now); err != nil {
+		if err := replaceDocumentContentFn(locked, target.Content, input.UserID, locked.Revision, now); err != nil {
 			return err
 		}
 		if err := uc.docs.Update(txCtx, locked); err != nil {
 			return fmt.Errorf("update restored document: %w", err)
 		}
 
-		restored, err := entity.NewDocumentVersion(*locked, target.Content, entity.DocumentVersionRestore, input.UserID, &sourceID, now)
+		restored, err := newDocumentVersionFn(*locked, target.Content, entity.DocumentVersionRestore, input.UserID, &sourceID, now)
 		if err != nil {
 			return fmt.Errorf("create restore version: %w", err)
 		}
 		if err := uc.versions.Create(txCtx, &restored); err != nil {
 			return fmt.Errorf("save restore version: %w", err)
+		}
+
+		if uc.auditLogs != nil {
+			docID := locked.ID
+			audit, err := newAuditLogFn(
+				&input.UserID,
+				"DOCUMENT_RESTORED",
+				"document",
+				&docID,
+				map[string]string{"source_version_id": sourceID.String()},
+				now,
+			)
+			if err != nil {
+				return fmt.Errorf("create document restored audit log entity: %w", err)
+			}
+			audit.WorkspaceID = &locked.WorkspaceID
+			entity.ApplyDocumentAuditContext(&audit, locked.WorkspaceID, "", "")
+			if err := uc.auditLogs.Create(txCtx, &audit); err != nil {
+				return fmt.Errorf("save document restored audit log: %w", err)
+			}
 		}
 
 		output = &RestoreVersionOutput{

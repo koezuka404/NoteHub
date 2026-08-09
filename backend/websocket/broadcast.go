@@ -16,6 +16,45 @@ func NewDocumentEventPublisher(hub *Hub) *DocumentEventPublisher {
 	return &DocumentEventPublisher{hub: hub, now: time.Now}
 }
 
+func (p *DocumentEventPublisher) NotifyDocumentCreated(workspaceID, documentID uuid.UUID, title, updatedBy, updatedAt string) error {
+	payload, err := MarshalEvent(EventDocumentCreated, DocumentListEventData{
+		DocumentID: documentID.String(),
+		Title:      title,
+		UpdatedBy:  updatedBy,
+		UpdatedAt:  updatedAt,
+	}, p.now())
+	if err != nil {
+		return err
+	}
+	p.hub.BroadcastWorkspace(workspaceID, payload)
+	return nil
+}
+
+func (p *DocumentEventPublisher) NotifyDocumentTitleUpdated(workspaceID, documentID uuid.UUID, title, updatedBy, updatedAt string) error {
+	listPayload, err := MarshalEvent(EventDocumentUpdated, DocumentListEventData{
+		DocumentID: documentID.String(),
+		Title:      title,
+		UpdatedBy:  updatedBy,
+		UpdatedAt:  updatedAt,
+	}, p.now())
+	if err != nil {
+		return err
+	}
+	p.hub.BroadcastWorkspace(workspaceID, listPayload)
+
+	editorPayload, err := MarshalEvent(EventDocumentUpdated, DocumentUpdatedData{
+		DocumentID: documentID.String(),
+		Title:      title,
+		UpdatedBy:  updatedBy,
+		UpdatedAt:  updatedAt,
+	}, p.now())
+	if err != nil {
+		return err
+	}
+	p.hub.BroadcastDocument(documentID, editorPayload)
+	return nil
+}
+
 func (p *DocumentEventPublisher) NotifyDocumentRestored(documentID uuid.UUID, content string, sourceVersionID uuid.UUID) error {
 	payload, err := MarshalEvent(EventDocumentRestored, DocumentRestoredData{
 		DocumentID:      documentID.String(),
@@ -40,6 +79,20 @@ func (p *DocumentEventPublisher) NotifyDocumentDeleted(documentID, deletedBy uui
 		return err
 	}
 	p.hub.DisconnectDocument(documentID, payload)
+	return nil
+}
+
+func (p *DocumentEventPublisher) NotifyDocumentListDeleted(workspaceID, documentID, deletedBy uuid.UUID, deletedAt string) error {
+	payload, err := MarshalEvent(EventDocumentDeleted, DocumentDeletedData{
+		DocumentID: documentID.String(),
+		DeletedBy:  deletedBy.String(),
+		DeletedAt:  deletedAt,
+		Reason:     ReasonDocumentDeleted,
+	}, p.now())
+	if err != nil {
+		return err
+	}
+	p.hub.BroadcastWorkspace(workspaceID, payload)
 	return nil
 }
 

@@ -20,15 +20,15 @@ func NewAccountController(account usecase.IAccountUsecase) *AccountController {
 func (c *AccountController) Suspend(e echo.Context) error {
 	userID, err := authenticatedUserID(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	workspaceID, err := parseWorkspaceIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	targetID, err := parseUserIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	ctx := e.Request().Context()
 	out, err := c.account.SuspendAccount(ctx, usecase.SuspendAccountInput{
@@ -45,15 +45,15 @@ func (c *AccountController) Suspend(e echo.Context) error {
 func (c *AccountController) Reactivate(e echo.Context) error {
 	userID, err := authenticatedUserID(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	workspaceID, err := parseWorkspaceIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	targetID, err := parseUserIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	ctx := e.Request().Context()
 	out, err := c.account.ReactivateAccount(ctx, usecase.ReactivateAccountInput{
@@ -70,15 +70,15 @@ func (c *AccountController) Reactivate(e echo.Context) error {
 func (c *AccountController) Delete(e echo.Context) error {
 	userID, err := authenticatedUserID(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	workspaceID, err := parseWorkspaceIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	targetID, err := parseUserIDParam(e)
 	if err != nil {
-		return err
+		return nil
 	}
 	ctx := e.Request().Context()
 	out, err := c.account.DeleteAccount(ctx, usecase.DeleteAccountInput{

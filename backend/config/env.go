@@ -85,9 +85,9 @@ func LoadFromEnv(getenv func(string) string) (*Config, error) {
 		RedisOperationTimeout:       durationValue(getenv("REDIS_OPERATION_TIMEOUT"), 2*time.Second),
 		JWTSecret:                   getenv("JWT_SECRET"),
 		JWTIssuer:                   valueOrDefault(getenv("JWT_ISSUER"), "notehub-api"),
-		JWTAudience:                 valueOrDefault(getenv("JWT_AUDIENCE"), "notehub-web"),
-		AccessTokenTTL:              durationValue(getenv("ACCESS_TOKEN_TTL"), 15*time.Minute),
-		RefreshTokenTTL:             durationValue(getenv("REFRESH_TOKEN_TTL"), 30*24*time.Hour),
+		JWTAudience:                 valueOrDefault(getenv("JWT_AUDIENCE"), "notehub-client"),
+		AccessTokenTTL:              resolveAccessTokenTTL(getenv),
+		RefreshTokenTTL:             resolveRefreshTokenTTL(environment, getenv),
 		BcryptCost:                  intValue(getenv("BCRYPT_COST"), 12),
 		CookieSecure:                boolValue(getenv("COOKIE_SECURE"), environment == EnvironmentProduction),
 		CookieDomain:                strings.TrimSpace(getenv("COOKIE_DOMAIN")),
@@ -301,4 +301,33 @@ func floatValue(raw string, fallback float64) float64 {
 		return -1
 	}
 	return value
+}
+
+func resolveAccessTokenTTL(getenv func(string) string) time.Duration {
+	if ttl := durationValue(getenv("ACCESS_TOKEN_TTL"), 0); ttl > 0 {
+		return ttl
+	}
+	minutes := intValue(getenv("ACCESS_TOKEN_TTL_MINUTES"), 15)
+	if minutes <= 0 {
+		return 15 * time.Minute
+	}
+	return time.Duration(minutes) * time.Minute
+}
+
+func resolveRefreshTokenTTL(environment Environment, getenv func(string) string) time.Duration {
+	if ttl := durationValue(getenv("REFRESH_TOKEN_TTL"), 0); ttl > 0 {
+		return ttl
+	}
+	if environment == EnvironmentProduction {
+		days := intValue(getenv("REFRESH_TOKEN_TTL_DAYS"), 14)
+		if days <= 0 {
+			return 14 * 24 * time.Hour
+		}
+		return time.Duration(days) * 24 * time.Hour
+	}
+	minutes := intValue(getenv("REFRESH_TOKEN_TTL_MINUTES"), 30)
+	if minutes <= 0 {
+		return 30 * time.Minute
+	}
+	return time.Duration(minutes) * time.Minute
 }

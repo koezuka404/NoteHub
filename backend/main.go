@@ -2,70 +2,72 @@ package main
 
 import (
 	"context"
-	"log"
-	"net/http"
-	"os"
-	"os/signal"
-	"strconv"
-	"syscall"
 	"time"
 
 	"github.com/labstack/echo/v4"
 
 	"github.com/koezuka404/notehub/authservice"
 	"github.com/koezuka404/notehub/batch"
-	"github.com/koezuka404/notehub/config"
 	"github.com/koezuka404/notehub/controller"
-	infrcrypto "github.com/koezuka404/notehub/usecase/crypto"
-	"github.com/koezuka404/notehub/db"
 	appmiddleware "github.com/koezuka404/notehub/middleware"
 	appredis "github.com/koezuka404/notehub/redis"
 	"github.com/koezuka404/notehub/repository"
 	"github.com/koezuka404/notehub/router"
 	"github.com/koezuka404/notehub/usecase"
+	infrcrypto "github.com/koezuka404/notehub/usecase/crypto"
 	appws "github.com/koezuka404/notehub/websocket"
 )
 
 func main() {
-	cfg, err := config.Load()
+	osExitFn(runFn())
+}
+
+func run() (exitCode int) {
+	defer func() {
+		if recover() != nil {
+			exitCode = 1
+		}
+	}()
+
+	cfg, err := loadConfigFn()
 	if err != nil {
-		log.Fatalf("config: %v", err)
+		fatalFn("config: %v", err)
 	}
-	database, err := db.Open(cfg.DatabaseURL)
+	database, err := openDatabaseFn(cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("database open: %v", err)
+		fatalFn("database open: %v", err)
 	}
 	defer func() {
-		if err := db.Close(database); err != nil {
-			log.Printf("database close: %v", err)
+		if err := closeDatabaseFn(database); err != nil {
+			logPrintfFn("database close: %v", err)
 		}
 	}()
 	pingCtx, pingCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer pingCancel()
-	if err := db.Ping(pingCtx, database); err != nil {
-		log.Fatalf("database ping: %v", err)
+	if err := pingDatabaseFn(pingCtx, database); err != nil {
+		fatalFn("database ping: %v", err)
 	}
-	if err := db.Migrate(database); err != nil {
-		log.Fatalf("database migrate: %v", err)
+	if err := migrateDatabaseFn(database); err != nil {
+		fatalFn("database migrate: %v", err)
 	}
 
-	jwtService, err := infrcrypto.NewJWTService(cfg.JWTSecret, cfg.JWTIssuer, cfg.JWTAudience, cfg.AccessTokenTTL)
+	jwtService, err := newJWTServiceFn(cfg)
 	if err != nil {
-		log.Fatalf("jwt: %v", err)
+		fatalFn("jwt: %v", err)
 	}
-	redisClient, err := appredis.NewClientWithTimeout(cfg.RedisURL, cfg.RedisOperationTimeout)
+	redisClient, err := newRedisClientFn(cfg.RedisURL, cfg.RedisOperationTimeout)
 	if err != nil {
-		log.Fatalf("redis client: %v", err)
+		fatalFn("redis client: %v", err)
 	}
 	defer func() {
-		if err := redisClient.Close(); err != nil {
-			log.Printf("redis close: %v", err)
+		if err := closeRedisClientFn(redisClient); err != nil {
+			logPrintfFn("redis close: %v", err)
 		}
 	}()
 	redisPingCtx, redisPingCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer redisPingCancel()
-	if err := redisClient.Ping(redisPingCtx); err != nil {
-		log.Fatalf("redis ping: %v", err)
+	if err := pingRedisClientFn(redisClient, redisPingCtx); err != nil {
+		fatalFn("redis ping: %v", err)
 	}
 
 	userRepository := repository.NewUserRepository(database)
@@ -77,18 +79,18 @@ func main() {
 	transactionManager := repository.NewTransactionManager(database)
 
 	authService := authservice.NewAuthService(
-		infrcrypto.NewPasswordService(cfg.BcryptCost), //IPasswordService
-		jwtService,                         //IAccessTokenService
-		infrcrypto.NewRandomTokenService(), //IRandomTokenService
-		infrcrypto.NewTokenHashService(),   //ITokenHashService
-		accessTokenRevocations,             //IAccessTokenRevocationStore
-		loginFailures,                      //ILoginFailureStore
+		infrcrypto.NewPasswordService(cfg.BcryptCost),
+		jwtService,
+		infrcrypto.NewRandomTokenService(),
+		infrcrypto.NewTokenHashService(),
+		accessTokenRevocations,
+		loginFailures,
 	)
 	authUseCase := usecase.NewAuthUseCase(
 		userRepository,
 		refreshTokenRepository,
 		auditLogRepository,
-		authService, //IAuthService
+		authService,
 		transactionManager,
 		cfg.RefreshTokenTTL,
 	)
@@ -191,6 +193,7 @@ func main() {
 		workspaceUseCase,
 		documentCache,
 		wsEventPublisher,
+		auditLogRepository,
 	)
 	versionController := controller.NewVersionController(versionUseCase)
 
@@ -237,29 +240,18 @@ func main() {
 		CSRF:           csrfMiddleware,
 		RateLimit:      rateLimitMiddleware,
 	})
-	go func() {
-		address := ":" + strconv.Itoa(cfg.HTTPPort)
-		if publicURL := os.Getenv("PUBLIC_HTTP_URL"); publicURL != "" {
-			log.Printf("NoteHub backend ready at %s", publicURL)
-			log.Printf("Health check: %s/health", publicURL)
-		}
-		log.Printf("listening on %s", address)
-		if err := e.Start(address); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server: %v", err)
-		}
-	}()
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
-	<-stop
+	startHTTPServerFn(e, cfg.HTTPPort)
+	waitForShutdownSignalFn()
 	batchCancel()
 	flushCtx, flushCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	if err := documentFlushBatch.FlushAllDirty(flushCtx); err != nil {
-		log.Printf("shutdown document flush: %v", err)
+	if err := flushAllDirtyFn(documentFlushBatch, flushCtx); err != nil {
+		logPrintfFn("shutdown document flush: %v", err)
 	}
 	flushCancel()
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
-	if err := e.Shutdown(shutdownCtx); err != nil {
-		log.Printf("shutdown: %v", err)
+	if err := shutdownEchoFn(e, shutdownCtx); err != nil {
+		logPrintfFn("shutdown: %v", err)
 	}
+	return 0
 }
