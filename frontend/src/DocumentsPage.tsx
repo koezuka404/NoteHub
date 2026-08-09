@@ -154,7 +154,7 @@ export default function DocumentsPage() {
     setError('');
     try {
       const updated = await updateWorkspace(accessToken, workspaceId, workspaceNameInput.trim());
-      setWorkspace((current) => (current ? { ...current, name: updated.name } : current));
+      setWorkspace({ ...workspace!, name: updated.name });
       setWorkspaceNameInput(updated.name);
     } catch (err) {
       setError(getErrorMessage(err));

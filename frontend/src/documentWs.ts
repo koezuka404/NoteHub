@@ -197,9 +197,6 @@ export function connectDocumentWebSocket(
   }
 
   function scheduleReconnect() {
-    if (closed || suppressReconnect) {
-      return;
-    }
     if (reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
       handlers.onError?.('WebSocket の再接続に失敗しました。ページを再読み込みしてください。');
       return;
@@ -248,13 +245,12 @@ export function connectDocumentWebSocket(
   }
 
   async function connectWithFreshToken() {
-    if (closed) {
-      return;
-    }
-
     let token = options.getAccessToken();
     if (options.refreshAccessToken) {
       token = await options.refreshAccessToken(token);
+    }
+    if (closed) {
+      return;
     }
     if (!token) {
       handlers.onError?.('WebSocket の再接続に失敗しました。再度ログインしてください。');
@@ -268,9 +264,6 @@ export function connectDocumentWebSocket(
   }
 
   function reconnectForTokenRefresh() {
-    if (closed) {
-      return;
-    }
     clearReconnectTimer();
     reconnectAttempt = 0;
     suppressReconnect = true;

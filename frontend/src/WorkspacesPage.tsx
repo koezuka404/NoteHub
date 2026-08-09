@@ -75,8 +75,7 @@ export default function WorkspacesPage() {
                 <Link to={`/workspaces/${workspace.id}/documents`} className="list-button list-link">
                   <span className="list-title">{workspace.name}</span>
                   <span className="list-meta">
-                    {formatRole(workspace.role)} ·{' '}
-                    {workspace.isAvailable ? '利用可能' : formatUnavailableReason(workspace.unavailableReason)}
+                    {formatRole(workspace.role)} · 利用可能
                   </span>
                 </Link>
               ) : (
