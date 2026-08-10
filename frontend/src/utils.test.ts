@@ -26,7 +26,7 @@ describe('getErrorMessage', () => {
 
 describe('formatters', () => {
   it('formatRole', () => {
-    expect(formatRole('host')).toBe('ホスト');
+    expect(formatRole('host')).toBe('オーナー');
     expect(formatRole('member')).toBe('メンバー');
     expect(formatRole('guest')).toBe('guest');
   });
@@ -51,7 +51,7 @@ describe('formatters', () => {
 
   it('formatVersionType', () => {
     expect(formatVersionType('auto_save')).toBe('自動保存');
-    expect(formatVersionType('manual_save')).toBe('手動保存');
+    expect(formatVersionType('manual_save')).toBe('保存');
     expect(formatVersionType('before_restore')).toBe('復元前');
     expect(formatVersionType('restore')).toBe('復元');
     expect(formatVersionType('other')).toBe('other');

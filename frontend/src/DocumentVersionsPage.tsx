@@ -66,7 +66,7 @@ export default function DocumentVersionsPage() {
         </div>
 
         {versions.length === 0 ? (
-          <p className="hint-inline">保存された履歴はまだありません。</p>
+          <p className="hint-inline">保存された履歴はまだありません</p>
         ) : (
           <ul className="item-list">
             {versions.map((version) => (

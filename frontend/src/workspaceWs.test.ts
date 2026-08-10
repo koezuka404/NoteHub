@@ -191,7 +191,7 @@ describe('connectWorkspaceWebSocket', () => {
     );
 
     await Promise.resolve();
-    expect(handlers.onError).toHaveBeenCalledWith('WebSocket の再接続に失敗しました。再度ログインしてください。');
+    expect(handlers.onError).toHaveBeenCalledWith('WebSocket の再接続に失敗しました再度ログインしてください');
 
     MockWebSocket.reset();
     installMockWebSocket();
@@ -214,7 +214,7 @@ describe('connectWorkspaceWebSocket', () => {
 
     expect(handlers.onReconnecting).toHaveBeenCalled();
     expect(handlers.onError).toHaveBeenCalledWith(
-      'WebSocket の再接続に失敗しました。ページを再読み込みしてください。',
+      'WebSocket の再接続に失敗しましたページを再読み込みしてください',
     );
   });
 

@@ -1,0 +1,50 @@
+# Render (backend) + Vercel (frontend) deployment
+#
+# 1. Render Dashboard > New > Blueprint > connect this repo (render.yaml)
+# 2. Set CORS_ALLOWED_ORIGINS and PUBLIC_HTTP_URL in Render after Vercel deploy
+# 3. Vercel: Root Directory = frontend, set env vars below
+
+databases:
+  - name: notehub-db
+    plan: free
+    databaseName: notehub
+    user: notehub
+
+services:
+  - type: redis
+    name: notehub-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
+
+  - type: web
+    name: notehub-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: notehub-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: notehub-redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAME_SITE
+        value: None
+      # Vercel のフロント URL（例: https://notehub.vercel.app）
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      # Render の公開 URL（例: https://notehub-api.onrender.com）
+      - key: PUBLIC_HTTP_URL
+        sync: false

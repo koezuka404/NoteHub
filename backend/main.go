@@ -224,6 +224,7 @@ func run() (exitCode int) {
 	})
 
 	e := echo.New()
+	e.IPExtractor = echo.ExtractIPFromXFFHeader()
 	e.Use(appmiddleware.NewRecoveryMiddleware())
 	e.Use(appmiddleware.NewRequestIDMiddleware())
 	e.Use(appmiddleware.NewLoggingMiddleware())

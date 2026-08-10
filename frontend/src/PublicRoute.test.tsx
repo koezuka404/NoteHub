@@ -16,6 +16,7 @@ function renderPublicRoute(initialEntry = '/login') {
       <Route element={<PublicRoute />}>
         <Route path="/login" element={<div>login-content</div>} />
       </Route>
+      <Route path="/workspaces" element={<div>workspaces-page</div>} />
       <Route path="/" element={<div>home-page</div>} />
     </Routes>,
     { router: { initialEntries: [initialEntry] } },
@@ -37,10 +38,10 @@ describe('PublicRoute', () => {
     expect(screen.getByText('読み込み中...')).toBeInTheDocument();
   });
 
-  it('redirects authenticated users to home', () => {
+  it('redirects authenticated users to workspaces', () => {
     setMockAuth({ accessToken: 'token', loading: false });
     renderPublicRoute();
-    expect(screen.getByText('home-page')).toBeInTheDocument();
+    expect(screen.getByText('workspaces-page')).toBeInTheDocument();
   });
 
   it('renders child routes for guests', () => {

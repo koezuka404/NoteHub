@@ -14,6 +14,8 @@ import {
 import { useAuth } from './auth';
 import AppLayout from './AppLayout';
 import DocumentMonacoEditor from './DocumentMonacoEditor';
+import HostPanel from './HostPanel';
+import WorkspaceHeader from './WorkspaceHeader';
 import { connectWorkspaceWebSocket } from './workspaceWs';
 import { formatDate, getErrorMessage } from './utils';
 
@@ -32,6 +34,7 @@ export default function DocumentsPage() {
   const [deleteReason, setDeleteReason] = useState('');
   const [updatingWorkspace, setUpdatingWorkspace] = useState(false);
   const [deletingWorkspace, setDeletingWorkspace] = useState(false);
+  const [showDeleteWorkspaceForm, setShowDeleteWorkspaceForm] = useState(false);
   const [deletingDocumentId, setDeletingDocumentId] = useState('');
   const accessTokenRef = useRef<string | null>(accessToken);
   const wsRef = useRef<ReturnType<typeof connectWorkspaceWebSocket> | null>(null);
@@ -187,18 +190,12 @@ export default function DocumentsPage() {
       {error ? <div className="error app-error">{error}</div> : null}
 
       <section className="panel">
-        <div className="panel-header">
-          <Link to="/workspaces" className="link-button">
-            ← ワークスペース一覧
-          </Link>
-          <h2>{workspace?.name ?? 'ドキュメント'}</h2>
-          <nav className="workspace-nav">
-            <span className="workspace-nav-link active">ドキュメント</span>
-            <Link to={`/workspaces/${workspaceId}/members`} className="workspace-nav-link">
-              メンバー
-            </Link>
-          </nav>
-        </div>
+        <WorkspaceHeader
+          workspaceId={workspaceId}
+          workspaceName={workspace?.name ?? 'ドキュメント'}
+          role={workspace?.role}
+          activeTab="documents"
+        />
         <form className="create-document-form" onSubmit={handleCreateDocument}>
           <div className="field">
             <label htmlFor="document-title">タイトル</label>
@@ -236,7 +233,7 @@ export default function DocumentsPage() {
               </Link>
               <button
                 type="button"
-                className="button compact-button danger-button document-list-delete"
+                className="document-list-delete"
                 disabled={deletingDocumentId === document.id}
                 onClick={() => void handleDeleteDocument(document.id)}
               >
@@ -247,8 +244,13 @@ export default function DocumentsPage() {
         </ul>
 
         {isHost ? (
-          <section className="member-section workspace-settings">
-            <h3 className="section-title">ワークスペース設定</h3>
+          <HostPanel
+            title="ワークスペース設定"
+            description="名前の変更や削除が行えます"
+          >
+            <p className="host-panel-link">
+              <Link to={`/workspaces/${workspaceId}/members`}>メンバー管理</Link>
+            </p>
             <form className="inline-form" onSubmit={handleUpdateWorkspace}>
               <input
                 value={workspaceNameInput}
@@ -261,25 +263,48 @@ export default function DocumentsPage() {
                 {updatingWorkspace ? '更新中...' : '名前を更新'}
               </button>
             </form>
-            <form className="create-document-form workspace-delete-form" onSubmit={handleDeleteWorkspace}>
-              <div className="field">
-                <label htmlFor="workspace-delete-reason">削除理由</label>
-                <textarea
-                  id="workspace-delete-reason"
-                  className="reason-textarea"
-                  value={deleteReason}
-                  onChange={(event) => setDeleteReason(event.target.value)}
-                  placeholder="削除理由を入力してください"
-                  maxLength={500}
-                  rows={3}
-                  required
-                />
-              </div>
-              <button type="submit" className="button compact-button danger-button" disabled={deletingWorkspace}>
-                {deletingWorkspace ? '削除中...' : 'ワークスペースを削除'}
+            {showDeleteWorkspaceForm ? (
+              <form className="create-document-form workspace-delete-form" onSubmit={handleDeleteWorkspace}>
+                <div className="field">
+                  <label htmlFor="workspace-delete-reason">削除理由</label>
+                  <textarea
+                    id="workspace-delete-reason"
+                    className="reason-textarea"
+                    value={deleteReason}
+                    onChange={(event) => setDeleteReason(event.target.value)}
+                    placeholder="削除理由を入力してください"
+                    maxLength={500}
+                    rows={3}
+                    required
+                  />
+                </div>
+                <div className="form-actions">
+                  <button type="submit" className="button compact-button danger-button" disabled={deletingWorkspace}>
+                    {deletingWorkspace ? '削除中...' : '削除する'}
+                  </button>
+                  <button
+                    type="button"
+                    className="button compact-button secondary-button"
+                    disabled={deletingWorkspace}
+                    onClick={() => {
+                      setShowDeleteWorkspaceForm(false);
+                      setDeleteReason('');
+                    }}
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <button
+                type="button"
+                className="button compact-button danger-button workspace-delete-toggle"
+                onClick={() => setShowDeleteWorkspaceForm(true)}
+              >
+                ワークスペースを削除
               </button>
-            </form>
-          </section>
+            )}
+          </HostPanel>
         ) : null}
       </section>
     </AppLayout>

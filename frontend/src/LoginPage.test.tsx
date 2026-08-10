@@ -87,7 +87,7 @@ describe('LoginPage', () => {
     expect(screen.getByLabelText('パスワード')).toHaveValue('');
   });
 
-  it('switches tabs and clears errors', async () => {
+  it('switches tabs and clears form fields and errors', async () => {
     const user = userEvent.setup();
     const login = vi.fn().mockRejectedValue({ code: 'INVALID_CREDENTIALS', message: 'bad' });
     setMockAuth({ login });
@@ -105,8 +105,12 @@ describe('LoginPage', () => {
     await user.click(screen.getByRole('button', { name: '新規登録' }));
     expect(screen.queryByText('メールアドレスまたはパスワードが正しくありません')).not.toBeInTheDocument();
     expect(screen.getByLabelText('名前')).toBeInTheDocument();
+    expect(screen.getByLabelText('メールアドレス')).toHaveValue('');
+    expect(screen.getByLabelText('パスワード')).toHaveValue('');
 
     await user.click(screen.getAllByRole('button', { name: 'ログイン' })[0]);
     expect(screen.queryByText('メールアドレスまたはパスワードが正しくありません')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('メールアドレス')).toHaveValue('');
+    expect(screen.getByLabelText('パスワード')).toHaveValue('');
   });
 });

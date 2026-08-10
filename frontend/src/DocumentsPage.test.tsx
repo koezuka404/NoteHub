@@ -167,12 +167,14 @@ describe.sequential('DocumentsPage', () => {
       expect(api.updateWorkspace).toHaveBeenCalledWith('access-token', 'ws-1', 'Renamed');
     });
 
+    expect(screen.queryByLabelText('削除理由')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'ワークスペースを削除' }));
     await user.type(screen.getByLabelText('削除理由'), 'cleanup');
     vi.spyOn(window, 'confirm').mockReturnValueOnce(false);
-    await user.click(screen.getByRole('button', { name: 'ワークスペースを削除' }));
+    await user.click(screen.getByRole('button', { name: '削除する' }));
     expect(api.deleteWorkspace).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole('button', { name: 'ワークスペースを削除' }));
+    await user.click(screen.getByRole('button', { name: '削除する' }));
     await waitFor(() => {
       expect(api.deleteWorkspace).toHaveBeenCalledWith('access-token', 'ws-1', 'cleanup');
     });
@@ -221,8 +223,9 @@ describe.sequential('DocumentsPage', () => {
     await user.click(screen.getByRole('button', { name: '名前を更新' }));
     await waitFor(() => expect(screen.getByText('入力値が不正です')).toBeInTheDocument());
 
-    await user.type(screen.getByLabelText('削除理由'), 'cleanup');
     await user.click(screen.getByRole('button', { name: 'ワークスペースを削除' }));
+    await user.type(screen.getByLabelText('削除理由'), 'cleanup');
+    await user.click(screen.getByRole('button', { name: '削除する' }));
     await waitFor(() => {
       expect(screen.getByText('ワークスペースが見つかりません')).toBeInTheDocument();
     });
@@ -237,6 +240,7 @@ describe.sequential('DocumentsPage', () => {
     fireEvent.submit(nameInput.closest('form')!);
     expect(api.updateWorkspace).not.toHaveBeenCalled();
 
+    fireEvent.click(screen.getByRole('button', { name: 'ワークスペースを削除' }));
     fireEvent.submit(screen.getByLabelText('削除理由').closest('form')!);
     expect(api.deleteWorkspace).not.toHaveBeenCalled();
   });

@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import {
   addMember,
   deleteAccount,
@@ -15,6 +15,8 @@ import {
 } from './api';
 import { useAuth } from './auth';
 import AppLayout from './AppLayout';
+import HostPanel from './HostPanel';
+import WorkspaceHeader from './WorkspaceHeader';
 import { formatDate, formatRole, formatUserStatus, getErrorMessage } from './utils';
 
 export default function MembersPage() {
@@ -37,6 +39,9 @@ export default function MembersPage() {
   const isHost = workspace?.role === 'host';
 
   const loadMembers = useCallback(async () => {
+    if (!accessToken || !workspaceId) {
+      return;
+    }
     const items = await listMembers(accessToken, workspaceId);
     setMembers(items);
   }, [accessToken, workspaceId]);
@@ -96,7 +101,7 @@ export default function MembersPage() {
       await addMember(accessToken, workspaceId, searchResult.id);
       setSearchResult(null);
       setSearchEmail('');
-      setSearchMessage('メンバーを追加しました');
+      setSearchMessage('メンバーを招待しました');
       await loadMembers();
     } catch (err) {
       setError(getErrorMessage(err));
@@ -128,7 +133,7 @@ export default function MembersPage() {
     if (!accessToken || !workspaceId) {
       return;
     }
-    if (!window.confirm(`${targetName} のアカウントを停止しますか？\n停止後はログイン・API・編集ができなくなります。`)) {
+    if (!window.confirm(`${targetName} のアカウントを停止しますか？\n停止後はログインや編集ができなくなります`)) {
       return;
     }
     setSuspendingUserId(targetUserId);
@@ -147,7 +152,7 @@ export default function MembersPage() {
     if (!accessToken || !workspaceId) {
       return;
     }
-    if (!window.confirm(`${targetName} のアカウントを復帰しますか？\n復帰後は再度ログインが必要です。`)) {
+    if (!window.confirm(`${targetName} のアカウントを復帰しますか？\n復帰後は再度ログインが必要です`)) {
       return;
     }
     setReactivatingUserId(targetUserId);
@@ -168,7 +173,7 @@ export default function MembersPage() {
     }
     if (
       !window.confirm(
-        `${targetName} のアカウントを論理削除しますか？\nこの操作は取り消せず、二度とログインできなくなります。`,
+        `${targetName} のアカウントを論理削除しますか？\nこの操作は取り消せず、二度とログインできなくなります`,
       )
     ) {
       return;
@@ -190,28 +195,24 @@ export default function MembersPage() {
       {error ? <div className="error app-error">{error}</div> : null}
 
       <section className="panel">
-        <div className="panel-header">
-          <Link to="/workspaces" className="link-button">
-            ← ワークスペース一覧
-          </Link>
-          <h2>{workspace?.name ?? 'メンバー'}</h2>
-          <nav className="workspace-nav">
-            <Link to={`/workspaces/${workspaceId}/documents`} className="workspace-nav-link">
-              ドキュメント
-            </Link>
-            <span className="workspace-nav-link active">メンバー</span>
-          </nav>
-        </div>
+        <WorkspaceHeader
+          workspaceId={workspaceId}
+          workspaceName={workspace?.name ?? 'メンバー'}
+          role={workspace?.role}
+          activeTab="members"
+        />
 
         {isHost ? (
-          <div className="member-section">
-            <h3 className="section-title">ユーザーを検索して追加</h3>
+          <HostPanel
+            title="メンバーを招待"
+            description="招待するメンバーのメールアドレスを入力して検索してください"
+          >
             <form className="inline-form" onSubmit={handleSearch}>
               <input
                 type="email"
                 value={searchEmail}
                 onChange={(event) => setSearchEmail(event.target.value)}
-                placeholder="追加するユーザーのメールアドレス"
+                placeholder="メールアドレス"
                 maxLength={255}
                 required
               />
@@ -236,15 +237,20 @@ export default function MembersPage() {
                   disabled={adding}
                   onClick={() => void handleAddMember()}
                 >
-                  {adding ? '追加中...' : 'メンバーに追加'}
+                  {adding ? '招待中...' : '招待する'}
                 </button>
               </div>
             ) : null}
-          </div>
+          </HostPanel>
         ) : null}
 
         <div className="member-section">
           <h3 className="section-title">メンバー一覧</h3>
+          {isHost ? (
+            <p className="host-panel-description member-list-host-note">
+              一覧からメンバーの停止や、ワークスペースからの削除が行えます
+            </p>
+          ) : null}
           {loading ? <p className="loading">読み込み中...</p> : null}
           <ul className="item-list">
             {members.map((member) => (
@@ -296,7 +302,7 @@ export default function MembersPage() {
                           disabled={removingUserId === member.userId}
                           onClick={() => void handleRemoveMember(member.userId, member.name)}
                         >
-                          {removingUserId === member.userId ? '削除中...' : 'WSから除外'}
+                          {removingUserId === member.userId ? '削除中...' : 'ワークスペースから削除'}
                         </button>
                       ) : null}
                     </div>
@@ -309,7 +315,7 @@ export default function MembersPage() {
         </div>
 
         {!isHost && user ? (
-          <p className="hint-inline">メンバーの追加・停止・復帰・アカウント削除はホストのみ実行できます。</p>
+          <p className="hint-inline">メンバーの招待や管理は、オーナーのみ行えます</p>
         ) : null}
       </section>
     </AppLayout>

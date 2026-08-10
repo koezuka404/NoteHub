@@ -79,7 +79,7 @@ func LoadFromEnv(getenv func(string) string) (*Config, error) {
 
 	cfg := &Config{
 		Environment:                 environment,
-		HTTPPort:                    intValue(getenv("HTTP_PORT"), 8080),
+		HTTPPort:                    resolveHTTPPort(getenv),
 		DatabaseURL:                 strings.TrimSpace(getenv("DATABASE_URL")),
 		RedisURL:                    strings.TrimSpace(getenv("REDIS_URL")),
 		RedisOperationTimeout:       durationValue(getenv("REDIS_OPERATION_TIMEOUT"), 2*time.Second),
@@ -220,6 +220,13 @@ func (c Config) Validate() error {
 	}
 
 	return errors.Join(errs...)
+}
+
+func resolveHTTPPort(getenv func(string) string) int {
+	if port := strings.TrimSpace(getenv("PORT")); port != "" {
+		return intValue(port, 8080)
+	}
+	return intValue(getenv("HTTP_PORT"), 8080)
 }
 
 func parseEnvironment(raw string) (Environment, error) {

@@ -57,7 +57,13 @@ func (c *AuthController) Login(e echo.Context) error {
 	}
 	c.setRefreshTokenCookie(e, o.RefreshToken)
 	c.setCSRFTokenCookie(e, o.CSRFToken)
-	return e.JSON(http.StatusOK, dto.Response{Data: dto.LoginResponse{User: dto.AuthUserResponse{ID: o.User.ID.String(), Name: o.User.Name, Email: o.User.Email, Status: string(o.User.Status)}, AccessToken: o.AccessToken, TokenType: o.TokenType, ExpiresAt: o.ExpiresAt}})
+	return e.JSON(http.StatusOK, dto.Response{Data: dto.LoginResponse{
+		User:        dto.AuthUserResponse{ID: o.User.ID.String(), Name: o.User.Name, Email: o.User.Email, Status: string(o.User.Status)},
+		AccessToken: o.AccessToken,
+		TokenType:   o.TokenType,
+		ExpiresAt:   o.ExpiresAt,
+		CsrfToken:   o.CSRFToken,
+	}})
 }
 
 // RefreshはPOST/api/auth/refreshを処理　RefreshTokenからAccessTokenを再発行する
@@ -73,14 +79,19 @@ func (c *AuthController) Refresh(e echo.Context) error {
 	}
 	c.setRefreshTokenCookie(e, o.RefreshToken)
 	c.setCSRFTokenCookie(e, o.CSRFToken)
-	return e.JSON(http.StatusOK, dto.Response{Data: dto.RefreshResponse{AccessToken: o.AccessToken, TokenType: o.TokenType, ExpiresAt: o.ExpiresAt}})
+	return e.JSON(http.StatusOK, dto.Response{Data: dto.RefreshResponse{
+		AccessToken: o.AccessToken,
+		TokenType:   o.TokenType,
+		ExpiresAt:   o.ExpiresAt,
+		CsrfToken:   o.CSRFToken,
+	}})
 }
 
 // MeはGET/api/meを処理　認証済みユーザーの情報を返す
 func (c *AuthController) Me(e echo.Context) error {
 	userID, ok := e.Get(appmiddleware.ContextUserID).(uuid.UUID)
 	if !ok || userID == uuid.Nil {
-		return writeAuthError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+		return writeAuthError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "ログイン情報が無効です再度ログインしてください")
 	}
 	ctx := e.Request().Context()
 	o, err := c.auth.GetCurrentUser(ctx, usecase.GetCurrentUserInput{UserID: userID})
@@ -94,15 +105,15 @@ func (c *AuthController) Me(e echo.Context) error {
 func (c *AuthController) Logout(e echo.Context) error {
 	userID, ok := e.Get(appmiddleware.ContextUserID).(uuid.UUID)
 	if !ok || userID == uuid.Nil {
-		return writeAuthError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+		return writeAuthError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "ログイン情報が無効です再度ログインしてください")
 	}
 	jti, ok := e.Get(appmiddleware.ContextAccessTokenJTI).(uuid.UUID)
 	if !ok || jti == uuid.Nil {
-		return writeAuthError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+		return writeAuthError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "ログイン情報が無効です再度ログインしてください")
 	}
 	expiresAt, ok := e.Get(appmiddleware.ContextAccessTokenExp).(time.Time)
 	if !ok || expiresAt.IsZero() {
-		return writeAuthError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+		return writeAuthError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "ログイン情報が無効です再度ログインしてください")
 	}
 	csrfValidated, _ := e.Get("csrf_validated").(bool)
 	refreshToken := ""
@@ -165,13 +176,13 @@ func handleAuthUseCaseError(e echo.Context, err error) error {
 	case errors.Is(err, usecase.ErrAccountSuspended), errors.Is(err, usecase.ErrAccountDeleted):
 		return writeAuthError(e, 401, "INVALID_CREDENTIALS", "メールアドレスまたはパスワードが正しくありません")
 	case errors.Is(err, usecase.ErrRefreshTokenRequired):
-		return writeAuthError(e, 401, "REFRESH_TOKEN_REQUIRED", "リフレッシュトークンが必要です")
+		return writeAuthError(e, 401, "REFRESH_TOKEN_REQUIRED", "ログインが必要です")
 	case errors.Is(err, usecase.ErrRefreshTokenExpired):
-		return writeAuthError(e, 401, "REFRESH_TOKEN_EXPIRED", "リフレッシュトークンの有効期限が切れています")
+		return writeAuthError(e, 401, "REFRESH_TOKEN_EXPIRED", "ログインの有効期限が切れました再度ログインしてください")
 	case errors.Is(err, usecase.ErrRefreshTokenInvalid):
-		return writeAuthError(e, 401, "REFRESH_TOKEN_INVALID", "リフレッシュトークンが不正です")
+		return writeAuthError(e, 401, "REFRESH_TOKEN_INVALID", "ログイン情報が無効です再度ログインしてください")
 	case errors.Is(err, usecase.ErrRefreshTokenRevoked), errors.Is(err, usecase.ErrRefreshTokenReused):
-		return writeAuthError(e, 401, "REFRESH_TOKEN_REVOKED", "リフレッシュトークンは失効しています")
+		return writeAuthError(e, 401, "REFRESH_TOKEN_REVOKED", "ログイン状態が無効になりました再度ログインしてください")
 	case errors.Is(err, usecase.ErrTokenOwnerMismatch):
 		return writeAuthError(e, 403, "TOKEN_OWNER_MISMATCH", "トークンの所有者が一致しません")
 	case errors.Is(err, usecase.ErrCSRFTokenInvalid):
@@ -179,7 +190,7 @@ func handleAuthUseCaseError(e echo.Context, err error) error {
 	case errors.Is(err, usecase.ErrAuthServiceUnavailable):
 		return writeAuthError(e, 503, "AUTH_SERVICE_UNAVAILABLE", "認証サービスを利用できません")
 	case errors.Is(err, usecase.ErrAccessTokenInvalid):
-		return writeAuthError(e, 401, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+		return writeAuthError(e, 401, "ACCESS_TOKEN_INVALID", "ログイン情報が無効です再度ログインしてください")
 	default:
 		return writeAuthError(e, 500, "INTERNAL_ERROR", "内部エラーが発生しました")
 	}

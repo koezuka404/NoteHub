@@ -24,11 +24,13 @@ type LoginResponse struct {
 	AccessToken string           `json:"accessToken"`
 	TokenType   string           `json:"tokenType"`
 	ExpiresAt   string           `json:"expiresAt"`
+	CsrfToken   string           `json:"csrfToken"`
 }
 type RefreshResponse struct {
 	AccessToken string `json:"accessToken"`
 	TokenType   string `json:"tokenType"`
 	ExpiresAt   string `json:"expiresAt"`
+	CsrfToken   string `json:"csrfToken"`
 }
 type LogoutResponse struct {
 	Message string `json:"message"`

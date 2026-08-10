@@ -65,7 +65,7 @@ export default function DocumentVersionDetailPage() {
     setSuccess('');
     try {
       await restoreVersion(accessToken, documentId, versionId);
-      setSuccess('復元しました。エディタに戻ります。');
+      setSuccess('復元しましたエディタに戻ります');
       window.setTimeout(() => {
         void navigate(`/workspaces/${workspaceId}/documents/${documentId}`, { replace: true });
       }, 800);

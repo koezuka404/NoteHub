@@ -196,17 +196,17 @@ func (c *WebSocketController) authenticate(e echo.Context) (uuid.UUID, error) {
 		}
 	}
 	if rawToken == "" {
-		_ = writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_REQUIRED", "アクセストークンが必要です")
+		_ = writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_REQUIRED", "ログインが必要です")
 		return uuid.Nil, errResponseSent
 	}
 
 	claims, err := c.tokens.ValidateAccessToken(rawToken, c.now().UTC())
 	if err != nil {
 		if errors.Is(err, jwt.ErrTokenExpired) {
-			_ = writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_EXPIRED", "アクセストークンの有効期限が切れています")
+			_ = writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_EXPIRED", "ログインの有効期限が切れました再度ログインしてください")
 			return uuid.Nil, errResponseSent
 		}
-		_ = writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+		_ = writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "ログイン情報が無効です再度ログインしてください")
 		return uuid.Nil, errResponseSent
 	}
 
@@ -217,7 +217,7 @@ func (c *WebSocketController) authenticate(e echo.Context) (uuid.UUID, error) {
 		return uuid.Nil, errResponseSent
 	}
 	if isRevoked {
-		_ = writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_REVOKED", "アクセストークンは失効しています")
+		_ = writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_REVOKED", "ログイン状態が無効になりました再度ログインしてください")
 		return uuid.Nil, errResponseSent
 	}
 
@@ -227,11 +227,11 @@ func (c *WebSocketController) authenticate(e echo.Context) (uuid.UUID, error) {
 		return uuid.Nil, errResponseSent
 	}
 	if !found || !user.CanAuthenticate() {
-		_ = writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+		_ = writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "ログイン情報が無効です再度ログインしてください")
 		return uuid.Nil, errResponseSent
 	}
 	if user.AuthVersion != claims.AuthVersion {
-		_ = writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_REVOKED", "アクセストークンは失効しています")
+		_ = writeWebSocketHTTPError(e, http.StatusUnauthorized, "ACCESS_TOKEN_REVOKED", "ログイン状態が無効になりました再度ログインしてください")
 		return uuid.Nil, errResponseSent
 	}
 	return claims.UserID, nil

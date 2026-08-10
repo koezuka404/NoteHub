@@ -14,6 +14,14 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  function switchMode(nextMode: Mode) {
+    setMode(nextMode);
+    setName('');
+    setEmail('');
+    setPassword('');
+    setError('');
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
@@ -49,20 +57,14 @@ export default function LoginPage() {
           <button
             type="button"
             className={mode === 'login' ? 'tab active' : 'tab'}
-            onClick={() => {
-              setMode('login');
-              setError('');
-            }}
+            onClick={() => switchMode('login')}
           >
             ログイン
           </button>
           <button
             type="button"
             className={mode === 'register' ? 'tab active' : 'tab'}
-            onClick={() => {
-              setMode('register');
-              setError('');
-            }}
+            onClick={() => switchMode('register')}
           >
             新規登録
           </button>

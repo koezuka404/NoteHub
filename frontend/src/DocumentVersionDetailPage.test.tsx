@@ -84,7 +84,7 @@ describe.sequential('DocumentVersionDetailPage', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('手動保存')).toBeInTheDocument();
+      expect(screen.getByText('保存')).toBeInTheDocument();
       expect(screen.getByDisplayValue('version content')).toBeInTheDocument();
       expect(screen.getByText(/Doc Title/)).toBeInTheDocument();
     });
@@ -120,7 +120,7 @@ describe.sequential('DocumentVersionDetailPage', () => {
     await user.click(screen.getByRole('button', { name: 'この履歴で復元' }));
     await waitFor(() => {
       expect(api.restoreVersion).toHaveBeenCalledWith('access-token', 'doc-1', 'v1');
-      expect(screen.getByText('復元しました。エディタに戻ります。')).toBeInTheDocument();
+      expect(screen.getByText('復元しましたエディタに戻ります')).toBeInTheDocument();
     });
 
     vi.advanceTimersByTime(800);
@@ -143,7 +143,7 @@ describe.sequential('DocumentVersionDetailPage', () => {
   it('skips load without access token', async () => {
     setMockAuth({ accessToken: null });
     renderPage();
-    await waitFor(() => expect(screen.queryByText('手動保存')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('保存')).not.toBeInTheDocument());
     expect(api.getVersion).not.toHaveBeenCalled();
   });
 

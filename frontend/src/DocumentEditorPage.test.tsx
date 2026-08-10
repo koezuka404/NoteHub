@@ -129,10 +129,10 @@ describe.sequential('DocumentEditorPage', () => {
     await invokeWsHandler('onOpen');
     await waitFor(() => expect(screen.getByText('接続中')).toBeInTheDocument());
 
-    await user.click(screen.getByRole('button', { name: '手動保存' }));
+    await user.click(screen.getByRole('button', { name: '保存' }));
     await waitFor(() => {
       expect(api.saveManualVersion).toHaveBeenCalledWith('access-token', 'doc-1');
-      expect(screen.getByText('手動保存しました')).toBeInTheDocument();
+      expect(screen.getByText('保存しました')).toBeInTheDocument();
     });
   });
 
@@ -183,15 +183,15 @@ describe.sequential('DocumentEditorPage', () => {
     await user.click(screen.getByRole('button', { name: 'タイトル保存' }));
     await waitFor(() => expect(api.updateDocument).toHaveBeenCalledWith('access-token', 'doc-1', 'Saved Title'));
 
-    await user.click(screen.getByRole('button', { name: '手動保存' }));
+    await user.click(screen.getByRole('button', { name: '保存' }));
     await waitFor(() => expect(screen.getByText('ドキュメントが見つかりません')).toBeInTheDocument());
 
     vi.spyOn(window, 'confirm').mockReturnValueOnce(false);
-    await user.click(screen.getByRole('button', { name: 'ドキュメント削除' }));
+    await user.click(screen.getByRole('button', { name: '削除' }));
     expect(api.deleteDocument).not.toHaveBeenCalled();
 
     vi.mocked(api.deleteDocument).mockRejectedValueOnce({ code: 'DOCUMENT_NOT_FOUND', message: 'missing' });
-    await user.click(screen.getByRole('button', { name: 'ドキュメント削除' }));
+    await user.click(screen.getByRole('button', { name: '削除' }));
     await waitFor(() => expect(screen.getByText('ドキュメントが見つかりません')).toBeInTheDocument());
   });
 
@@ -203,11 +203,11 @@ describe.sequential('DocumentEditorPage', () => {
     fireEvent.change(screen.getByTestId('monaco-editor'), { target: { value: 'pending edit' } });
     vi.useRealTimers();
 
-    fireEvent.click(screen.getByRole('button', { name: '手動保存' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
     await waitFor(() => expect(mockSendEdit).toHaveBeenCalledWith('pending edit'));
 
     vi.mocked(api.deleteDocument).mockResolvedValueOnce({ documentId: 'doc-1', deletedAt: '2026-01-02' });
-    fireEvent.click(screen.getByRole('button', { name: 'ドキュメント削除' }));
+    fireEvent.click(screen.getByRole('button', { name: '削除' }));
     await waitFor(() => expect(screen.getByTestId('documents-page')).toBeInTheDocument());
   });
 
@@ -317,10 +317,10 @@ describe.sequential('DocumentEditorPage', () => {
     setMockAuth({ accessToken: null });
     rerenderPage(view);
 
-    await user.click(screen.getByRole('button', { name: '手動保存' }));
+    await user.click(screen.getByRole('button', { name: '保存' }));
     await user.type(screen.getByLabelText('ドキュメントタイトル'), 'New Title');
     await user.click(screen.getByRole('button', { name: 'タイトル保存' }));
-    await user.click(screen.getByRole('button', { name: 'ドキュメント削除' }));
+    await user.click(screen.getByRole('button', { name: '削除' }));
 
     expect(api.saveManualVersion).not.toHaveBeenCalled();
     expect(api.updateDocument).not.toHaveBeenCalled();

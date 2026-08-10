@@ -198,7 +198,7 @@ export function connectDocumentWebSocket(
 
   function scheduleReconnect() {
     if (reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
-      handlers.onError?.('WebSocket の再接続に失敗しました。ページを再読み込みしてください。');
+      handlers.onError?.('WebSocket の再接続に失敗しましたページを再読み込みしてください');
       return;
     }
 
@@ -253,7 +253,7 @@ export function connectDocumentWebSocket(
       return;
     }
     if (!token) {
-      handlers.onError?.('WebSocket の再接続に失敗しました。再度ログインしてください。');
+      handlers.onError?.('WebSocket の再接続に失敗しました再度ログインしてください');
       return;
     }
 

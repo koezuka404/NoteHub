@@ -65,7 +65,7 @@ describe('DocumentVersionsPage', () => {
     });
     expect(screen.getByRole('link', { name: /Doc Title/ })).toBeInTheDocument();
     expect(screen.getByText('Workspace')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /手動保存/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /保存/ })).toHaveAttribute(
       'href',
       '/workspaces/ws-1/documents/d1/versions/v1',
     );
@@ -76,7 +76,7 @@ describe('DocumentVersionsPage', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('保存された履歴はまだありません。')).toBeInTheDocument();
+      expect(screen.getByText('保存された履歴はまだありません')).toBeInTheDocument();
     });
   });
 

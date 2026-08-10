@@ -8,18 +8,18 @@ const ERROR_MESSAGES: Record<string, string> = {
   EMAIL_ALREADY_EXISTS: 'このメールアドレスは既に登録されています',
   INVALID_CREDENTIALS: 'メールアドレスまたはパスワードが正しくありません',
   LOGIN_RATE_LIMITED: '時間を空けて再度お試しください',
-  REFRESH_TOKEN_REQUIRED: 'リフレッシュトークンが必要です',
-  REFRESH_TOKEN_EXPIRED: 'リフレッシュトークンの有効期限が切れています',
-  REFRESH_TOKEN_INVALID: 'リフレッシュトークンが不正です',
-  REFRESH_TOKEN_REVOKED: 'リフレッシュトークンは失効しています',
+  REFRESH_TOKEN_REQUIRED: 'ログインが必要です',
+  REFRESH_TOKEN_EXPIRED: 'ログインの有効期限が切れました再度ログインしてください',
+  REFRESH_TOKEN_INVALID: 'ログイン情報が無効です再度ログインしてください',
+  REFRESH_TOKEN_REVOKED: 'ログイン状態が無効になりました再度ログインしてください',
   TOKEN_OWNER_MISMATCH: 'トークンの所有者が一致しません',
   CSRF_TOKEN_INVALID: 'CSRFトークンが不正です',
   CSRF_TOKEN_REQUIRED: 'CSRFトークンが必要です',
   AUTH_SERVICE_UNAVAILABLE: '認証サービスを利用できません',
-  ACCESS_TOKEN_INVALID: 'アクセストークンが不正です',
-  ACCESS_TOKEN_REQUIRED: 'アクセストークンが必要です',
-  ACCESS_TOKEN_EXPIRED: 'アクセストークンの有効期限が切れています',
-  ACCESS_TOKEN_REVOKED: 'アクセストークンは失効しています',
+  ACCESS_TOKEN_INVALID: 'ログイン情報が無効です再度ログインしてください',
+  ACCESS_TOKEN_REQUIRED: 'ログインが必要です',
+  ACCESS_TOKEN_EXPIRED: 'ログインの有効期限が切れました再度ログインしてください',
+  ACCESS_TOKEN_REVOKED: 'ログイン状態が無効になりました再度ログインしてください',
   ACCOUNT_UNAVAILABLE: 'このアカウントは利用できません',
   INTERNAL_ERROR: '内部エラーが発生しました',
   DATABASE_ERROR: 'データベース処理に失敗しました',
@@ -86,7 +86,7 @@ export function getErrorMessage(error: unknown): string {
 export function formatRole(role: string): string {
   switch (role) {
     case 'host':
-      return 'ホスト';
+      return 'オーナー';
     case 'member':
       return 'メンバー';
     default:
@@ -127,7 +127,7 @@ export function formatVersionType(type: string): string {
     case 'auto_save':
       return '自動保存';
     case 'manual_save':
-      return '手動保存';
+      return '保存';
     case 'before_restore':
       return '復元前';
     case 'restore':

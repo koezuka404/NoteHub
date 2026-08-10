@@ -47,6 +47,19 @@ func TestLoadFromEnv_ValidDevelopmentDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadFromEnv_UsesPortEnvVar(t *testing.T) {
+	env := validEnv()
+	env["PORT"] = "10000"
+	env["HTTP_PORT"] = "8080"
+	cfg, err := LoadFromEnv(getenvFrom(env))
+	if err != nil {
+		t.Fatalf("LoadFromEnv: %v", err)
+	}
+	if cfg.HTTPPort != 10000 {
+		t.Fatalf("HTTPPort = %d, want 10000", cfg.HTTPPort)
+	}
+}
+
 func TestLoadFromEnv_ValidProduction(t *testing.T) {
 	env := validEnv()
 	env["APP_ENV"] = "production"

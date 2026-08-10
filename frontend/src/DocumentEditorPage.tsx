@@ -5,6 +5,7 @@ import { useAuth } from './auth';
 import { connectDocumentWebSocket, type EditorInfo } from './documentWs';
 import AppLayout from './AppLayout';
 import DocumentMonacoEditor from './DocumentMonacoEditor';
+import HostBadge from './HostBadge';
 import { getErrorMessage } from './utils';
 
 export default function DocumentEditorPage() {
@@ -13,6 +14,7 @@ export default function DocumentEditorPage() {
   const { user, accessToken } = useAuth();
   const [title, setTitle] = useState('');
   const [workspaceName, setWorkspaceName] = useState('');
+  const [workspaceRole, setWorkspaceRole] = useState('');
   const [content, setContent] = useState('');
   const [editors, setEditors] = useState<EditorInfo[]>([]);
   const [connected, setConnected] = useState(false);
@@ -55,6 +57,7 @@ export default function DocumentEditorPage() {
           return;
         }
         setWorkspaceName(workspace.name);
+        setWorkspaceRole(workspace.role);
         setTitle(document.title);
         setContent(document.content);
       } catch (err) {
@@ -211,7 +214,7 @@ export default function DocumentEditorPage() {
     setWsError('');
     try {
       await saveManualVersion(accessToken, documentId);
-      setSaveMessage('手動保存しました');
+      setSaveMessage('保存しました');
     } catch (err) {
       setWsError(getErrorMessage(err));
     } finally {
@@ -281,6 +284,20 @@ export default function DocumentEditorPage() {
           <Link to={`/workspaces/${workspaceId}/documents`} className="link-button">
             ← {workspaceName}
           </Link>
+          <div className="workspace-nav-section">
+            <div className="workspace-nav-row">
+              <nav className="workspace-nav" aria-label="ワークスペースメニュー">
+                <span className="workspace-nav-link active">ドキュメント</span>
+                <Link to={`/workspaces/${workspaceId}/members`} className="workspace-nav-link">
+                  メンバー
+                </Link>
+              </nav>
+              {workspaceRole ? <HostBadge role={workspaceRole} /> : null}
+            </div>
+            {workspaceRole === 'host' ? (
+              <p className="host-notice">ワークスペースの設定変更ができます</p>
+            ) : null}
+          </div>
           <div className="editor-heading">
             <div className="editor-title-form">
               <input
@@ -312,27 +329,29 @@ export default function DocumentEditorPage() {
         </div>
 
         <div className="editor-toolbar">
+          <div className="editor-toolbar-primary">
+            <button
+              type="button"
+              className="button compact-button"
+              onClick={() => void handleManualSave()}
+              disabled={saving}
+            >
+              {saving ? '保存中...' : '保存'}
+            </button>
+            <Link
+              to={`/workspaces/${workspaceId}/documents/${documentId}/versions`}
+              className="button compact-button secondary-button link-as-button"
+            >
+              編集履歴
+            </Link>
+          </div>
           <button
             type="button"
-            className="button compact-button"
-            onClick={() => void handleManualSave()}
-            disabled={saving}
-          >
-            {saving ? '保存中...' : '手動保存'}
-          </button>
-          <Link
-            to={`/workspaces/${workspaceId}/documents/${documentId}/versions`}
-            className="button compact-button secondary-button link-as-button"
-          >
-            編集履歴
-          </Link>
-          <button
-            type="button"
-            className="button compact-button danger-button"
+            className="editor-delete-button"
             onClick={() => void handleDeleteDocument()}
             disabled={deleting}
           >
-            {deleting ? '削除中...' : 'ドキュメント削除'}
+            {deleting ? '削除中...' : '削除'}
           </button>
         </div>
 

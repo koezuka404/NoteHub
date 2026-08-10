@@ -36,6 +36,23 @@ describe('api helpers', () => {
     expect(api.getCsrfToken()).toBe('');
   });
 
+  it('getCsrfToken prefers token returned from login', async () => {
+    mockFetch({
+      ok: true,
+      data: {
+        user,
+        accessToken: 't1',
+        tokenType: 'Bearer',
+        expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+        csrfToken: 'from-api',
+      },
+    });
+    await api.login('user@example.com', 'pass');
+    expect(api.getCsrfToken()).toBe('from-api');
+    clearCsrfCookie();
+    expect(api.getCsrfToken()).toBe('from-api');
+  });
+
   it('isAccessTokenExpiredOrExpiringSoon handles missing and invalid expiry', () => {
     expect(api.isAccessTokenExpiredOrExpiringSoon()).toBe(true);
     api.configureAuthHandlers({ onAccessTokenRefreshed: vi.fn(), onAuthFailed: vi.fn() });

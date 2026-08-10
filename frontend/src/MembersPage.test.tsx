@@ -41,10 +41,10 @@ const deletedMember = {
 };
 
 function submitSearch(email: string) {
-  fireEvent.change(screen.getByPlaceholderText('追加するユーザーのメールアドレス'), {
+  fireEvent.change(screen.getByPlaceholderText('メールアドレス'), {
     target: { value: email },
   });
-  fireEvent.submit(screen.getByPlaceholderText('追加するユーザーのメールアドレス').closest('form')!);
+  fireEvent.submit(screen.getByPlaceholderText('メールアドレス').closest('form')!);
 }
 
 const hostMember = {
@@ -106,11 +106,11 @@ describe.sequential('MembersPage', () => {
     submitSearch('found@example.com');
 
     await waitFor(() => expect(screen.getByText('Found User')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: 'メンバーに追加' }));
+    fireEvent.click(screen.getByRole('button', { name: '招待する' }));
 
     await waitFor(() => {
       expect(api.addMember).toHaveBeenCalledWith('access-token', 'ws-1', 'u5');
-      expect(screen.getByText('メンバーを追加しました')).toBeInTheDocument();
+      expect(screen.getByText('メンバーを招待しました')).toBeInTheDocument();
     });
   });
 
@@ -120,7 +120,7 @@ describe.sequential('MembersPage', () => {
 
     renderPage();
 
-    await waitFor(() => expect(screen.getByPlaceholderText('追加するユーザーのメールアドレス')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByPlaceholderText('メールアドレス')).toBeInTheDocument());
 
     submitSearch('missing@example.com');
     await waitFor(() => {
@@ -165,10 +165,10 @@ describe.sequential('MembersPage', () => {
     await waitFor(() => expect(api.deleteAccount).toHaveBeenCalledWith('access-token', 'ws-1', 'u3'));
 
     vi.spyOn(window, 'confirm').mockReturnValueOnce(false);
-    fireEvent.click(screen.getAllByRole('button', { name: 'WSから除外' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'ワークスペースから削除' })[0]);
     expect(api.removeMember).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'WSから除外' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'ワークスペースから削除' })[0]);
     await waitFor(() => expect(api.removeMember).toHaveBeenCalledWith('access-token', 'ws-1', 'u2'));
   });
 
@@ -181,9 +181,9 @@ describe.sequential('MembersPage', () => {
     await waitFor(() => {
       expect(screen.getByText('メンバーがいません')).toBeInTheDocument();
     });
-    expect(screen.queryByText('ユーザーを検索して追加')).not.toBeInTheDocument();
+    expect(screen.queryByText('メンバーを招待')).not.toBeInTheDocument();
     expect(
-      screen.getByText('メンバーの追加・停止・復帰・アカウント削除はホストのみ実行できます。'),
+      screen.getByText('メンバーの招待や管理は、オーナーのみ行えます'),
     ).toBeInTheDocument();
   });
 
@@ -213,7 +213,7 @@ describe.sequential('MembersPage', () => {
 
     submitSearch('found@example.com');
     await waitFor(() => expect(screen.getByText('Found User')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: 'メンバーに追加' }));
+    fireEvent.click(screen.getByRole('button', { name: '招待する' }));
     await waitFor(() => expect(screen.getByText('既に参加しています')).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: '停止' }));
@@ -228,7 +228,7 @@ describe.sequential('MembersPage', () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('Member Two')).toBeInTheDocument());
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'WSから除外' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'ワークスペースから削除' })[0]);
     await waitFor(() => expect(screen.getByText('メンバーが見つかりません')).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: '復帰' }));
@@ -248,9 +248,9 @@ describe.sequential('MembersPage', () => {
     renderPage();
 
     await waitFor(() => expect(screen.getByText('Host User')).toBeInTheDocument());
-    expect(screen.getByText(/— · ホスト/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'WSから除外' })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'WSから除外' })).toHaveLength(1);
+    expect(screen.getByText(/— · オーナー/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'ワークスペースから削除' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'ワークスペースから削除' })).toHaveLength(1);
   });
 
   it('skips member actions without access token after rerender', async () => {
@@ -260,7 +260,7 @@ describe.sequential('MembersPage', () => {
     setMockAuth({ accessToken: null });
     rerenderPage(view);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'WSから除外' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'ワークスペースから削除' })[0]);
     fireEvent.click(screen.getByRole('button', { name: '停止' }));
     fireEvent.click(screen.getByRole('button', { name: '復帰' }));
     fireEvent.click(screen.getByRole('button', { name: 'アカウント削除' }));
@@ -285,13 +285,13 @@ describe.sequential('MembersPage', () => {
     });
 
     const view = renderPage();
-    await waitFor(() => expect(screen.getByPlaceholderText('追加するユーザーのメールアドレス')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByPlaceholderText('メールアドレス')).toBeInTheDocument());
     submitSearch('found@example.com');
     await waitFor(() => expect(screen.getByText('Found User')).toBeInTheDocument());
 
     setMockAuth({ accessToken: null });
     rerenderPage(view);
-    fireEvent.click(screen.getByRole('button', { name: 'メンバーに追加' }));
+    fireEvent.click(screen.getByRole('button', { name: '招待する' }));
     expect(api.addMember).not.toHaveBeenCalled();
   });
 
@@ -300,7 +300,7 @@ describe.sequential('MembersPage', () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('Member Two')).toBeInTheDocument());
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'WSから除外' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'ワークスペースから削除' })[0]);
     fireEvent.click(screen.getByRole('button', { name: '停止' }));
     fireEvent.click(screen.getByRole('button', { name: '復帰' }));
     fireEvent.click(screen.getByRole('button', { name: 'アカウント削除' }));

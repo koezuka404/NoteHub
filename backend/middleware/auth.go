@@ -50,38 +50,38 @@ func (m *AuthMiddleware) Handle(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(ctx echo.Context) error {
 		authorization := strings.TrimSpace(ctx.Request().Header.Get(echo.HeaderAuthorization))
 		if authorization == "" {
-			return writeAuthMiddlewareError(ctx, 401, "ACCESS_TOKEN_REQUIRED", "アクセストークンが必要です")
+			return writeAuthMiddlewareError(ctx, 401, "ACCESS_TOKEN_REQUIRED", "ログインが必要です")
 		}
 		parts := strings.Fields(authorization)
 		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || parts[1] == "" {
-			return writeAuthMiddlewareError(ctx, 401, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+			return writeAuthMiddlewareError(ctx, 401, "ACCESS_TOKEN_INVALID", "ログイン情報が無効です再度ログインしてください")
 		}
 		claims, err := m.tokens.ValidateAccessToken(parts[1], m.now().UTC())
 		if err != nil {
 			if errors.Is(err, jwt.ErrTokenExpired) {
-				return writeAuthMiddlewareError(ctx, 401, "ACCESS_TOKEN_EXPIRED", "アクセストークンの有効期限が切れています")
+				return writeAuthMiddlewareError(ctx, 401, "ACCESS_TOKEN_EXPIRED", "ログインの有効期限が切れました再度ログインしてください")
 			}
-			return writeAuthMiddlewareError(ctx, 401, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+			return writeAuthMiddlewareError(ctx, 401, "ACCESS_TOKEN_INVALID", "ログイン情報が無効です再度ログインしてください")
 		}
 		isRevoked, err := m.revoked.IsRevoked(ctx.Request().Context(), claims.JTI)
 		if err != nil {
 			return writeAuthMiddlewareError(ctx, 503, "AUTH_SERVICE_UNAVAILABLE", "認証サービスを利用できません")
 		}
 		if isRevoked {
-			return writeAuthMiddlewareError(ctx, 401, "ACCESS_TOKEN_REVOKED", "アクセストークンは失効しています")
+			return writeAuthMiddlewareError(ctx, 401, "ACCESS_TOKEN_REVOKED", "ログイン状態が無効になりました再度ログインしてください")
 		}
 		user, found, err := m.users.FindByID(ctx.Request().Context(), claims.UserID)
 		if err != nil {
 			return writeAuthMiddlewareError(ctx, 500, "DATABASE_ERROR", "データベース処理に失敗しました")
 		}
 		if !found {
-			return writeAuthMiddlewareError(ctx, 401, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+			return writeAuthMiddlewareError(ctx, 401, "ACCESS_TOKEN_INVALID", "ログイン情報が無効です再度ログインしてください")
 		}
 		if !user.CanAuthenticate() {
 			return writeAuthMiddlewareError(ctx, 401, "ACCOUNT_UNAVAILABLE", "このアカウントは利用できません")
 		}
 		if user.AuthVersion != claims.AuthVersion {
-			return writeAuthMiddlewareError(ctx, 401, "ACCESS_TOKEN_REVOKED", "アクセストークンは失効しています")
+			return writeAuthMiddlewareError(ctx, 401, "ACCESS_TOKEN_REVOKED", "ログイン状態が無効になりました再度ログインしてください")
 		}
 		ctx.Set(ContextAuthUser, user)
 		ctx.Set(ContextUserID, claims.UserID)

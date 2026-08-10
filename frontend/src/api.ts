@@ -31,11 +31,34 @@ type ApiOptions = {
 type TokenRefreshResult = {
   accessToken: string;
   expiresAt: string;
+  csrfToken?: string;
 };
+
+let storedCsrfToken: string | null = null;
+
+function setStoredCsrfToken(token: string | null) {
+  storedCsrfToken = token;
+}
+
+function applyCsrfToken(token?: string) {
+  if (token) {
+    setStoredCsrfToken(token);
+  }
+}
+
+function clearStoredAuthState() {
+  setStoredCsrfToken(null);
+  stopProactiveRefresh();
+}
 
 type AccessTokenListener = (accessToken: string, expiresAt: string) => void;
 
 const PROACTIVE_REFRESH_MARGIN_MS = 60_000;
+
+function resolveApiUrl(path: string): string {
+  const base = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ?? '';
+  return `${base}${path}`;
+}
 
 let authHandlers: AuthHandlers | null = null;
 let refreshPromise: Promise<string> | null = null;
@@ -45,6 +68,9 @@ const accessTokenListeners = new Set<AccessTokenListener>();
 
 export function configureAuthHandlers(handlers: AuthHandlers | null) {
   authHandlers = handlers;
+  if (!handlers) {
+    clearStoredAuthState();
+  }
 }
 
 export function subscribeAccessTokenRefresh(listener: AccessTokenListener): () => void {
@@ -105,6 +131,7 @@ function notifyAccessTokenRefresh(result: TokenRefreshResult) {
 }
 
 function applyTokenRefreshResult(result: TokenRefreshResult): TokenRefreshResult {
+  applyCsrfToken(result.csrfToken);
   notifyAccessTokenRefresh(result);
   return result;
 }
@@ -120,7 +147,7 @@ async function refreshAccessToken(): Promise<string> {
 
   refreshPromise = (async () => {
     try {
-      const result = await request<{ accessToken: string; tokenType: string; expiresAt: string }>(
+      const result = await request<TokenRefreshResult & { tokenType: string }>(
         '/api/auth/refresh',
         {
           method: 'POST',
@@ -130,13 +157,14 @@ async function refreshAccessToken(): Promise<string> {
         },
         { skipAuthRetry: true },
       );
-      notifyAccessTokenRefresh(result);
+      applyTokenRefreshResult(result);
       return result.accessToken;
     } catch {
+      clearStoredAuthState();
       authHandlers?.onAuthFailed();
       throw {
         code: 'ACCESS_TOKEN_EXPIRED',
-        message: 'アクセストークンの有効期限が切れています',
+        message: 'ログインの有効期限が切れました再度ログインしてください',
         status: 401,
       } satisfies ApiError & { status: number };
     } finally {
@@ -173,7 +201,7 @@ async function request<T>(
     headers.set('Content-Type', 'application/json');
   }
 
-  const response = await fetch(path, {
+  const response = await fetch(resolveApiUrl(path), {
     ...init,
     headers,
     credentials: 'include',
@@ -209,6 +237,9 @@ export async function api<T>(path: string, init: RequestInit = {}, accessToken?:
 }
 
 export function getCsrfToken(): string {
+  if (storedCsrfToken) {
+    return storedCsrfToken;
+  }
   const match = document.cookie.match(/(?:^|;\s*)notehub_csrf_token=([^;]*)/);
   return match ? decodeURIComponent(match[1]) : '';
 }
@@ -223,6 +254,7 @@ export type LoginResult = {
   accessToken: string;
   tokenType: string;
   expiresAt: string;
+  csrfToken?: string;
 };
 
 export function register(name: string, email: string, password: string) {
@@ -242,7 +274,7 @@ export async function login(email: string, password: string) {
 }
 
 export async function refresh() {
-  const result = await request<{ accessToken: string; tokenType: string; expiresAt: string }>(
+  const result = await request<LoginResult>(
     '/api/auth/refresh',
     {
       method: 'POST',
@@ -256,14 +288,16 @@ export async function refresh() {
   return result;
 }
 
-export function logout(accessToken: string) {
-  return api<{ message: string }>('/api/auth/logout', {
+export async function logout(accessToken: string) {
+  const result = await api<{ message: string }>('/api/auth/logout', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'X-CSRF-Token': getCsrfToken(),
     },
   });
+  setStoredCsrfToken(null);
+  return result;
 }
 
 export function me(accessToken: string) {

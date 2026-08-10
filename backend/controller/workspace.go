@@ -166,7 +166,7 @@ func (c *WorkspaceController) Delete(e echo.Context) error {
 func authenticatedUserID(e echo.Context) (uuid.UUID, error) {
 	userID, ok := e.Get(appmiddleware.ContextUserID).(uuid.UUID)
 	if !ok || userID == uuid.Nil {
-		_ = writeWorkspaceError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "アクセストークンが不正です")
+		_ = writeWorkspaceError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "ログイン情報が無効です再度ログインしてください")
 		return uuid.Nil, errResponseSent
 	}
 	return userID, nil

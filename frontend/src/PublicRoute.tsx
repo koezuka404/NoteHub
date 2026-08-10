@@ -13,7 +13,7 @@ export default function PublicRoute() {
   }
 
   if (accessToken) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/workspaces" replace />;
   }
 
   return <Outlet />;
