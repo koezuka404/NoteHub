@@ -12,7 +12,6 @@ function resetApiState() {
   api.configureAuthHandlers(null);
   api.stopProactiveRefresh();
   clearCsrfCookie();
-  sessionStorage.removeItem('notehub_csrf_token');
   vi.unstubAllGlobals();
   vi.useRealTimers();
 }
@@ -37,7 +36,7 @@ describe('api helpers', () => {
     expect(api.getCsrfToken()).toBe('');
   });
 
-  it('getCsrfToken prefers token returned from login', async () => {
+  it('getCsrfToken keeps token in memory after login', async () => {
     mockFetch({
       ok: true,
       data: {
@@ -52,11 +51,6 @@ describe('api helpers', () => {
     expect(api.getCsrfToken()).toBe('from-api');
     clearCsrfCookie();
     expect(api.getCsrfToken()).toBe('from-api');
-  });
-
-  it('getCsrfToken restores token from sessionStorage after reload', () => {
-    sessionStorage.setItem('notehub_csrf_token', 'stored-token');
-    expect(api.getCsrfToken()).toBe('stored-token');
   });
 
   it('isAccessTokenExpiredOrExpiringSoon handles missing and invalid expiry', () => {
@@ -174,7 +168,6 @@ describe('api helpers', () => {
   });
 
   it('deduplicates concurrent refresh calls', async () => {
-    sessionStorage.setItem('notehub_csrf_token', 'csrf');
     mockFetch({
       ok: true,
       data: {

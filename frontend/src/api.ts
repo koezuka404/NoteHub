@@ -35,20 +35,10 @@ type TokenRefreshResult = {
   tokenType?: string;
 };
 
-const CSRF_STORAGE_KEY = 'notehub_csrf_token';
-
 let storedCsrfToken: string | null = null;
 
 function setStoredCsrfToken(token: string | null) {
   storedCsrfToken = token;
-  if (typeof sessionStorage === 'undefined') {
-    return;
-  }
-  if (token) {
-    sessionStorage.setItem(CSRF_STORAGE_KEY, token);
-  } else {
-    sessionStorage.removeItem(CSRF_STORAGE_KEY);
-  }
 }
 
 function applyCsrfToken(token?: string) {
@@ -162,7 +152,6 @@ function performTokenRefresh(): Promise<TokenRefreshResult> {
         '/api/auth/refresh',
         {
           method: 'POST',
-          headers: csrfRequestHeaders(),
         },
         { skipAuthRetry: true },
       );
@@ -258,13 +247,6 @@ export async function api<T>(path: string, init: RequestInit = {}, accessToken?:
 export function getCsrfToken(): string {
   if (storedCsrfToken) {
     return storedCsrfToken;
-  }
-  if (typeof sessionStorage !== 'undefined') {
-    const fromStorage = sessionStorage.getItem(CSRF_STORAGE_KEY);
-    if (fromStorage) {
-      storedCsrfToken = fromStorage;
-      return fromStorage;
-    }
   }
   const match = document.cookie.match(/(?:^|;\s*)notehub_csrf_token=([^;]*)/);
   return match ? decodeURIComponent(match[1]) : '';

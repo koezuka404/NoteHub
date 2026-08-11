@@ -15,6 +15,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   TOKEN_OWNER_MISMATCH: 'トークンの所有者が一致しません',
   CSRF_TOKEN_INVALID: 'CSRFトークンが不正です',
   CSRF_TOKEN_REQUIRED: 'CSRFトークンが必要です',
+  ORIGIN_NOT_ALLOWED: 'リクエスト元が許可されていません',
   AUTH_SERVICE_UNAVAILABLE: '認証サービスを利用できません',
   ACCESS_TOKEN_INVALID: 'ログイン情報が無効です再度ログインしてください',
   ACCESS_TOKEN_REQUIRED: 'ログインが必要です',

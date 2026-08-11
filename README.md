@@ -145,7 +145,7 @@ Vercel の Environment:
 
 **注意:** `notehub-api.onrender.com` など Blueprint 名と異なる URL になることがあります。Dashboard の URL を使ってください。
 
-**CSRF（Double Submit Cookie）:** ログイン / リフレッシュ時に API が返す `csrfToken` をフロントが `sessionStorage` に保存し、`X-CSRF-Token` ヘッダーで送信します。Cookie が送れない場合（`COOKIE_SAME_SITE` 未設定など）は `/api/auth/refresh` が 403 になります。
+**CSRF / セッション:** `POST /api/auth/refresh` は **Origin 検証 + Refresh Cookie** で保護します（localStorage 等に CSRF を保存しません）。`POST /api/auth/logout` は **Double Submit Cookie**（`notehub_csrf_token` Cookie と `X-CSRF-Token` ヘッダーの一致）を要求します。CSRF トークンはログイン / リフレッシュ応答を **メモリ上のみ** に保持します。Render では `COOKIE_SAME_SITE=None` が必須です。
 
 動作確認: `https://<your-api>/health` → `{"status":"ok"}`
 

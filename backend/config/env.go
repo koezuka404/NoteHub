@@ -91,7 +91,7 @@ func LoadFromEnv(getenv func(string) string) (*Config, error) {
 		BcryptCost:                  intValue(getenv("BCRYPT_COST"), 12),
 		CookieSecure:                boolValue(getenv("COOKIE_SECURE"), environment == EnvironmentProduction),
 		CookieDomain:                strings.TrimSpace(getenv("COOKIE_DOMAIN")),
-		CookieSameSite:              valueOrDefault(getenv("COOKIE_SAME_SITE"), "Lax"),
+		CookieSameSite:              normalizeCookieSameSite(valueOrDefault(getenv("COOKIE_SAME_SITE"), "Lax")),
 		RefreshTokenCookieName:      valueOrDefault(getenv("REFRESH_TOKEN_COOKIE_NAME"), "notehub_refresh_token"),
 		CSRFTokenCookieName:         valueOrDefault(getenv("CSRF_TOKEN_COOKIE_NAME"), "notehub_csrf_token"),
 		AllowedOrigins:              splitCSV(getenv("CORS_ALLOWED_ORIGINS")),
@@ -239,6 +239,19 @@ func parseEnvironment(raw string) (Environment, error) {
 		return EnvironmentProduction, nil
 	default:
 		return "", fmt.Errorf("APP_ENV must be development, test, or production")
+	}
+}
+
+func normalizeCookieSameSite(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "none":
+		return "None"
+	case "strict":
+		return "Strict"
+	case "lax":
+		return "Lax"
+	default:
+		return strings.TrimSpace(value)
 	}
 }
 

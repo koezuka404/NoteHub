@@ -219,6 +219,8 @@ func run() (exitCode int) {
 		CookieName: cfg.CSRFTokenCookieName,
 		HeaderName: "X-CSRF-Token",
 	})
+	requireRefreshMiddleware := appmiddleware.NewRequireRefreshTokenMiddleware(cfg.RefreshTokenCookieName)
+	originValidationMiddleware := appmiddleware.NewOriginValidationMiddleware(cfg)
 	rateLimitMiddleware := appmiddleware.NewRateLimitMiddleware(tokenBuckets, appmiddleware.RateLimitConfig{
 		Capacity: cfg.RateLimitCapacity, RefillPerSecond: cfg.RateLimitRefillRate,
 	})
@@ -237,9 +239,11 @@ func run() (exitCode int) {
 		Document:       documentController,
 		Version:        versionController,
 		WebSocket:      webSocketController,
-		AuthMiddleware: authMiddleware,
-		CSRF:           csrfMiddleware,
-		RateLimit:      rateLimitMiddleware,
+		AuthMiddleware:      authMiddleware,
+		RequireRefreshToken: requireRefreshMiddleware,
+		OriginValidation:    originValidationMiddleware,
+		CSRF:                csrfMiddleware,
+		RateLimit:           rateLimitMiddleware,
 	})
 	startHTTPServerFn(e, cfg.HTTPPort)
 	waitForShutdownSignalFn()
