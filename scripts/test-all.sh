@@ -83,9 +83,8 @@ cleanup() {
 trap cleanup EXIT
 
 set -a
-if [[ -f "$ROOT_DIR/.env" ]]; then
-  # shellcheck disable=SC1091
-  source "$ROOT_DIR/.env"
+if [[ -f "$ROOT_DIR/.env.local" ]]; then
+  source "$ROOT_DIR/.env.local"
 fi
 export JWT_SECRET="${JWT_SECRET:-notehub-ci-secret-key-32bytes-minimum}"
 export JWT_ISSUER="${JWT_ISSUER:-notehub-api}"

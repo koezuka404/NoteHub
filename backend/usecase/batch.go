@@ -13,7 +13,6 @@ import (
 	"time"
 )
 
-// cleanup.go
 
 type ICleanupRedisStore interface {
 	CleanupEphemeralKeys(ctx context.Context) (int, error)
@@ -72,7 +71,6 @@ func (u *CleanupUseCase) RunOnce(ctx context.Context) error {
 	return nil
 }
 
-// database_backup.go
 
 type DatabaseBackupUseCase struct {
 	databaseURL string

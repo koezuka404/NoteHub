@@ -21,7 +21,6 @@ const (
 	ContextAuthVersion    = "auth_version"
 )
 
-// Concrete interfaces avoid coupling Middleware to repository implementations.
 type IAuthUserFinder interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*entity.User, bool, error)
 }

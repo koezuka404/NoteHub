@@ -22,20 +22,20 @@ const (
 )
 
 type IAuthService interface {
-	//IPasswordService
+
 	HashPassword(password string) (string, error)
 	ComparePassword(passwordHash, password string) error
-	//IAccessTokenService
+
 	GenerateAccessToken(userID uuid.UUID, authVersion uint, now time.Time) (token string, expiresAt time.Time, err error)
-	//IRandomTokenService
+
 	GenerateRefreshToken() (string, error)
 	GenerateCSRFToken() (string, error)
-	//ITokenHashService
+
 	HashToken(token string) string
-	//IAccessTokenRevocationStore
+
 	RevokeAccessToken(ctx context.Context, jti uuid.UUID, ttl time.Duration) error
 	IsAccessTokenRevoked(ctx context.Context, jti uuid.UUID) (bool, error)
-	//ILoginFailureStore
+
 	IsLoginLocked(ctx context.Context, email string) (locked bool, retryAfter time.Duration, err error)
 	RecordLoginFailure(ctx context.Context, email string) (locked bool, retryAfter time.Duration, err error)
 	ResetLoginFailures(ctx context.Context, email string) error
@@ -53,7 +53,7 @@ type AuthUseCase struct {
 	users           repository.UserRepository
 	refreshTokens   repository.RefreshTokenRepository
 	auditLogs       repository.AuditLogRepository
-	auth            IAuthService //IPasswordService, IAccessTokenService, IRandomTokenService, ITokenHashService, IAccessTokenRevocationStore, ILoginFailureStore
+	auth            IAuthService
 	transactions    repository.TransactionManager
 	refreshTokenTTL time.Duration
 	now             func() time.Time
@@ -74,7 +74,6 @@ func NewAuthUseCase(
 	}
 }
 
-// auth_helpers.go
 
 func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
@@ -123,7 +122,7 @@ func validateLoginInput(input LoginInput) bool {
 	return normalizeEmail(input.Email) != "" && input.Password != ""
 }
 
-//auth_login.go
+
 
 const dummyPasswordHash = "$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro4llC/.og/at2.uheWG/igi"
 
@@ -299,7 +298,6 @@ func (uc *AuthUseCase) recordLoginFailedAudit(
 	_ = uc.auditLogs.Create(ctx, &audit)
 }
 
-// auth_register.go
 
 type RegisterInput struct {
 	Name      string
@@ -370,7 +368,6 @@ func (uc *AuthUseCase) Register(ctx context.Context, input RegisterInput) (*Regi
 	return output, nil
 }
 
-// auth_refresh.go
 
 type RefreshInput struct {
 	RefreshToken string
@@ -487,7 +484,7 @@ func (uc *AuthUseCase) Refresh(ctx context.Context, input RefreshInput) (*Refres
 	return output, nil
 }
 
-//auth_logout.go
+
 
 type LogoutInput struct {
 	UserID         uuid.UUID
@@ -562,7 +559,7 @@ func (uc *AuthUseCase) Logout(ctx context.Context, input LogoutInput) (*LogoutOu
 	return &LogoutOutput{}, nil
 }
 
-//auth_me.go
+
 
 type GetCurrentUserInput struct {
 	UserID uuid.UUID

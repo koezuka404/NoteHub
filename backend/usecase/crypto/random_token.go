@@ -30,5 +30,4 @@ func generateRandomToken(size int) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(value), nil
 }
 
-// randomReader exists for tests; production uses crypto/rand.Read.
 var randomReader = rand.Read

@@ -30,7 +30,6 @@ func NewAuthController(auth usecase.IAuthUsecase, cookies AuthCookieConfig) *Aut
 	return &AuthController{auth: auth, cookies: cookies}
 }
 
-// RegisterはPOST/api/auth/registerを処理して新規ユーザーを作成
 func (c *AuthController) Register(e echo.Context) error {
 	var r dto.RegisterRequest
 	if err := e.Bind(&r); err != nil {
@@ -44,7 +43,6 @@ func (c *AuthController) Register(e echo.Context) error {
 	return e.JSON(http.StatusCreated, dto.Response{Data: dto.RegisterResponse{User: dto.AuthUserResponse{ID: o.ID.String(), Name: o.Name, Email: o.Email, Status: string(o.Status)}, CreatedAt: o.CreatedAt}})
 }
 
-// LoginはPOST/api/auth/loginを処理してAccessTokenとCookieを返す
 func (c *AuthController) Login(e echo.Context) error {
 	var r dto.LoginRequest
 	if err := e.Bind(&r); err != nil {
@@ -66,7 +64,6 @@ func (c *AuthController) Login(e echo.Context) error {
 	}})
 }
 
-// RefreshはPOST/api/auth/refreshを処理　RefreshTokenからAccessTokenを再発行する
 func (c *AuthController) Refresh(e echo.Context) error {
 	cookie, err := e.Cookie(c.cookies.RefreshName)
 	if err != nil || cookie.Value == "" {
@@ -87,7 +84,6 @@ func (c *AuthController) Refresh(e echo.Context) error {
 	}})
 }
 
-// MeはGET/api/meを処理　認証済みユーザーの情報を返す
 func (c *AuthController) Me(e echo.Context) error {
 	userID, ok := e.Get(appmiddleware.ContextUserID).(uuid.UUID)
 	if !ok || userID == uuid.Nil {
@@ -101,7 +97,6 @@ func (c *AuthController) Me(e echo.Context) error {
 	return e.JSON(http.StatusOK, dto.Response{Data: dto.MeResponse{User: dto.AuthUserResponse{ID: o.ID.String(), Name: o.Name, Email: o.Email, Status: string(o.Status)}}})
 }
 
-// LogoutはPOST/api/auth/logoutを処理　トークンを失効させてCookieを削除
 func (c *AuthController) Logout(e echo.Context) error {
 	userID, ok := e.Get(appmiddleware.ContextUserID).(uuid.UUID)
 	if !ok || userID == uuid.Nil {
@@ -134,18 +129,15 @@ func (c *AuthController) Logout(e echo.Context) error {
 	return e.JSON(http.StatusOK, dto.Response{Data: dto.LogoutResponse{Message: "ログアウトしました"}})
 }
 
-// clearAuthCookies　Refresh/CSRFCookieを削除する
 func (c *AuthController) clearAuthCookies(e echo.Context) {
 	e.SetCookie(&http.Cookie{Name: c.cookies.RefreshName, Value: "", Path: "/api/auth", Domain: c.cookies.Domain, MaxAge: -1, Expires: time.Unix(0, 0), HttpOnly: true, Secure: c.cookies.Secure, SameSite: parseSameSite(c.cookies.SameSite)})
 	e.SetCookie(&http.Cookie{Name: c.cookies.CSRFName, Value: "", Path: "/", Domain: c.cookies.Domain, MaxAge: -1, Expires: time.Unix(0, 0), HttpOnly: false, Secure: c.cookies.Secure, SameSite: parseSameSite(c.cookies.SameSite)})
 }
 
-// setRefreshTokenCookie　HttpOnlyのRefreshTokenCookieを設定する
 func (c *AuthController) setRefreshTokenCookie(e echo.Context, refresh string) {
 	e.SetCookie(&http.Cookie{Name: c.cookies.RefreshName, Value: refresh, Path: "/api/auth", Domain: c.cookies.Domain, MaxAge: int(c.cookies.RefreshTTL.Seconds()), HttpOnly: true, Secure: c.cookies.Secure, SameSite: parseSameSite(c.cookies.SameSite)})
 }
 
-// setCSRFTokenCookie　CSRF対策用Cookieを設定する
 func (c *AuthController) setCSRFTokenCookie(e echo.Context, token string) {
 	e.SetCookie(&http.Cookie{Name: c.cookies.CSRFName, Value: token, Path: "/", Domain: c.cookies.Domain, MaxAge: int(c.cookies.RefreshTTL.Seconds()), HttpOnly: false, Secure: c.cookies.Secure, SameSite: parseSameSite(c.cookies.SameSite)})
 }
@@ -161,7 +153,6 @@ func parseSameSite(v string) http.SameSite {
 	}
 }
 
-// handleAuthUseCaseError　は認証のUseCaseエラーをHTTPステータスとJSONレスポンスへ変換
 func handleAuthUseCaseError(e echo.Context, err error) error {
 	switch {
 	case errors.Is(err, usecase.ErrValidation):

@@ -36,8 +36,20 @@ services:
     container_name: notehub-backend
     restart: unless-stopped
     env_file:
-      - .env
+      - .env.local
     environment:
+      APP_ENV: development
+      JWT_ISSUER: notehub-api
+      JWT_AUDIENCE: notehub-client
+      ACCESS_TOKEN_TTL_MINUTES: 15
+      REFRESH_TOKEN_TTL_MINUTES: 30
+      REFRESH_TOKEN_TTL_DAYS: 14
+      BCRYPT_COST: 12
+      COOKIE_SECURE: "false"
+      COOKIE_SAME_SITE: Lax
+      COOKIE_DOMAIN: ""
+      REFRESH_TOKEN_COOKIE_NAME: notehub_refresh_token
+      CSRF_TOKEN_COOKIE_NAME: notehub_csrf_token
       DATABASE_URL: postgres://notehub:notehub@postgres:5432/notehub?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       HTTP_PORT: 8080

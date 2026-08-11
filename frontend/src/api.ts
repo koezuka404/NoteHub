@@ -137,7 +137,6 @@ function scheduleProactiveRefresh(expiresAt: string) {
   proactiveRefreshTimer = window.setTimeout(() => {
     proactiveRefreshTimer = null;
     void refreshAccessToken().catch(() => {
-      // onAuthFailed is handled inside refreshAccessToken
     });
   }, Math.max(delay, 0));
 }

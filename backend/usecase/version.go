@@ -85,7 +85,6 @@ func (uc *VersionUseCase) currentContent(ctx context.Context, doc *entity.Docume
 	return doc.Content, nil
 }
 
-// version_create.go
 
 type CreateVersionInput struct {
 	DocumentID  uuid.UUID
@@ -191,7 +190,6 @@ func (uc *VersionUseCase) SaveManualVersion(ctx context.Context, input SaveManua
 	return output, nil
 }
 
-// version_get.go
 
 type GetVersionInput struct {
 	UserID     uuid.UUID
@@ -235,7 +233,6 @@ func (uc *VersionUseCase) GetVersion(ctx context.Context, input GetVersionInput)
 	}, nil
 }
 
-// version_list.go
 
 type ListVersionsInput struct {
 	UserID     uuid.UUID
@@ -275,7 +272,6 @@ func (uc *VersionUseCase) ListVersions(ctx context.Context, input ListVersionsIn
 	return items, nil
 }
 
-// version_restore.go
 
 type RestoreVersionInput struct {
 	UserID     uuid.UUID

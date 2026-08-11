@@ -6,6 +6,7 @@ node_modules/
 # Frontend build & test artifacts
 frontend/dist/
 frontend/coverage/
+*.tsbuildinfo
 
 # Go module cache (local)
 backend/.gomodcache/
@@ -13,9 +14,14 @@ backend/.gomodcache/
 # Go test coverage
 *.out
 
-# Environment
+# Environment (local values / secrets — never commit)
 .env
-.env.*
+.env.local
+.env.*.local
+
+# Environment templates (definition examples — safe to commit)
+!.env.example
+!**/.env.example
 
 # Editor / OS
 .idea/

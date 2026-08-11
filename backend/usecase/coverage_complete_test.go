@@ -16,7 +16,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// --- account helpers ---
 
 type errRevokeRefreshRepo struct {
 	trackingRefreshTokenRepo
@@ -291,7 +290,6 @@ func TestCoverage_Account_DisconnectHostedWorkspacesNilWorkspaces(t *testing.T) 
 	}
 }
 
-// --- auth helpers ---
 
 type shortHashAuthService struct {
 	mockAuthService
@@ -404,9 +402,7 @@ func TestCoverage_Auth_RegisterErrors(t *testing.T) {
 	t.Run("exists by email error", func(t *testing.T) {
 		users := &stubUserRepoFull{}
 		users.users = map[uuid.UUID]*entity.User{}
-		// stub ExistsByEmail not implemented with error - use FindByEmail path via custom
 		type existsErrRepo struct{ stubUserRepoFull }
-		// override ExistsByEmail via embedding pattern
 		uc := NewAuthUseCase(&existsErrUserRepo{}, &mockRefreshTokenRepo{}, &mockAuditLogRepo{}, &mockAuthService{}, &mockTransactionManager{}, time.Hour)
 		uc.now = usecaseTestNow
 		_, err := uc.Register(context.Background(), RegisterInput{Name: "Alice", Email: "new@example.com", Password: "Pass1234"})
@@ -658,8 +654,6 @@ func TestCoverage_Auth_LogoutInnerErrors(t *testing.T) {
 	t.Run("revoke refresh error", func(t *testing.T) {
 		refresh := &trackingRefreshRepo{stubRefreshRepoFull: stubRefreshRepoFull{byHash: map[string]*entity.RefreshToken{testTokenHash: &token}}}
 		uc := newRefreshAuthUseCase(&stubUserRepoFull{}, refresh, &mockAuthService{}, &mockAuditLogRepo{})
-		// Force Revoke to fail by using expired token that can't revoke - actually need token.Revoke error
-		// Revoke fails on already revoked - use revoked token
 		revoked := token
 		revokedAt := now
 		revoked.RevokedAt = &revokedAt
@@ -669,9 +663,7 @@ func TestCoverage_Auth_LogoutInnerErrors(t *testing.T) {
 			UserID: userID, AccessTokenJTI: uuid.New(), AccessTokenExp: now.Add(time.Hour),
 			RefreshToken: "refresh-token", CSRFValidated: true,
 		})
-		// already revoked token skips revoke path - use active token with broken update instead
 		if err != nil {
-			// acceptable
 		}
 	})
 
@@ -729,7 +721,6 @@ func TestCoverage_Auth_RecordLoginRateLimitedAndFailedNilAudit(t *testing.T) {
 	uc.recordLoginFailedAudit(context.Background(), nil, nil, LoginInput{}, "invalid_credentials")
 }
 
-// --- batch ---
 
 func TestCoverage_Batch_BackupRunOnceErrors(t *testing.T) {
 	t.Run("mkdir error", func(t *testing.T) {
@@ -800,7 +791,6 @@ func TestCoverage_Batch_BackupRunOnceErrors(t *testing.T) {
 	})
 }
 
-// --- document ---
 
 func TestCoverage_Document_CRUDErrors(t *testing.T) {
 	userID := uuid.New()
@@ -906,7 +896,6 @@ func TestCoverage_Document_CRUDErrors(t *testing.T) {
 	})
 }
 
-// --- document autosave ---
 
 func TestCoverage_AutoSave_ConstructorDefaults(t *testing.T) {
 	uc := NewDocumentAutoSaveUseCase(&stubDocumentRepo{}, &stubVersionRepo{}, &stubDocumentCache{}, &stubAutoSaveLock{}, &mockTransactionManager{}, 0, 0)
@@ -1074,7 +1063,6 @@ func (c *recheckDirtyCache) GetRevision(_ context.Context, documentID uuid.UUID)
 	return c.stubDocumentCache.GetRevision(context.Background(), documentID)
 }
 
-// --- document websocket ---
 
 func TestCoverage_WebSocket_ConstructorDefaults(t *testing.T) {
 	uc := NewDocumentWebSocketUseCase(&stubDocumentRepo{}, &stubUserRepoFull{}, nil, &stubWebSocketSessions{}, &stubDocumentEditors{}, docAccess(uuid.New()), 0, 0)
@@ -1229,7 +1217,6 @@ func TestCoverage_WebSocket_ErrorBranches(t *testing.T) {
 	_ = workspaceID
 }
 
-// --- member ---
 
 func TestCoverage_Member_ErrorBranches(t *testing.T) {
 	hostID, workspaceID, targetID, access := memberFixture()
@@ -1340,7 +1327,6 @@ func TestCoverage_Member_ErrorBranches(t *testing.T) {
 	})
 }
 
-// --- version ---
 
 func TestCoverage_Version_ErrorBranches(t *testing.T) {
 	userID, workspaceID, doc := versionFixture()
@@ -1445,7 +1431,6 @@ func TestCoverage_Version_ErrorBranches(t *testing.T) {
 	})
 }
 
-// --- workspace ---
 
 type hostFindErrUserRepo struct {
 	stubUserRepoFull
@@ -2236,5 +2221,4 @@ func TestCoverage_FinalPush(t *testing.T) {
 	})
 }
 
-// unused import guard for gorm in member duplicate key path reference
 var _ = gorm.ErrDuplicatedKey

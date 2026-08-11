@@ -61,7 +61,6 @@ func NewWorkspaceUseCase(
 	}
 }
 
-// workspace_helpers.go
 
 func normalizeWorkspaceName(name string) string {
 	return strings.TrimSpace(name)
@@ -113,7 +112,6 @@ func workspaceAvailability(host *entity.User) (bool, string) {
 	return false, unavailableHostSuspended
 }
 
-// account_workspace_lock.go
 
 func checkWorkspaceHostStatus(host *entity.User) error {
 	if host.CanAuthenticate() {
@@ -152,7 +150,6 @@ func (uc *WorkspaceUseCase) findActiveUser(ctx context.Context, userID uuid.UUID
 	return user, nil
 }
 
-// workspace_create.go
 
 type CreateWorkspaceInput struct {
 	UserID    uuid.UUID
@@ -214,7 +211,6 @@ func (uc *WorkspaceUseCase) CreateWorkspace(ctx context.Context, input CreateWor
 	}, nil
 }
 
-// workspace_get.go
 
 type GetWorkspaceInput struct {
 	UserID      uuid.UUID
@@ -259,7 +255,6 @@ func (uc *WorkspaceUseCase) GetWorkspace(ctx context.Context, input GetWorkspace
 	}, nil
 }
 
-// workspace_list.go
 
 type ListWorkspacesInput struct {
 	UserID uuid.UUID
@@ -322,7 +317,6 @@ func (uc *WorkspaceUseCase) ListWorkspaces(ctx context.Context, input ListWorksp
 	return items, nil
 }
 
-// workspace_update.go
 
 type UpdateWorkspaceInput struct {
 	UserID      uuid.UUID
@@ -393,7 +387,6 @@ func (uc *WorkspaceUseCase) UpdateWorkspace(ctx context.Context, input UpdateWor
 	return output, nil
 }
 
-// workspace_delete.go
 
 type DeleteWorkspaceInput struct {
 	UserID      uuid.UUID
@@ -478,7 +471,6 @@ func (uc *WorkspaceUseCase) DeleteWorkspace(ctx context.Context, input DeleteWor
 	return output, nil
 }
 
-// workspace_access.go
 
 type CheckWorkspaceAccessInput struct {
 	UserID       uuid.UUID

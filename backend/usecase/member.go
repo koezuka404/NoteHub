@@ -58,7 +58,6 @@ func NewMemberUseCase(
 	}
 }
 
-// member_helpers.go
 
 func validEmail(raw string) (string, error) {
 	email := normalizeEmail(raw)
@@ -98,7 +97,6 @@ func (uc *MemberUseCase) requireMember(ctx context.Context, userID, workspaceID 
 	return err
 }
 
-// member_add.go
 
 type AddMemberInput struct {
 	UserID       uuid.UUID
@@ -181,7 +179,6 @@ func (uc *MemberUseCase) AddMember(ctx context.Context, input AddMemberInput) (*
 	return output, nil
 }
 
-// member_list.go
 
 type ListMembersInput struct {
 	UserID      uuid.UUID
@@ -229,7 +226,6 @@ func (uc *MemberUseCase) ListMembers(ctx context.Context, input ListMembersInput
 	return items, nil
 }
 
-// member_remove.go
 
 type RemoveMemberInput struct {
 	UserID       uuid.UUID
@@ -281,7 +277,6 @@ func (uc *MemberUseCase) RemoveMember(ctx context.Context, input RemoveMemberInp
 	return nil
 }
 
-// member_search.go
 
 type SearchUserInput struct {
 	UserID      uuid.UUID

@@ -63,7 +63,6 @@ func TestAutoSave_LockNotAcquired(t *testing.T) {
 		t.Fatalf("SaveDocument: %v", err)
 	}
 	if len(cache.dirty) != 0 && cache.dirty[docID] {
-		// still dirty when lock not acquired
 	} else if _, ok := cache.dirty[docID]; ok && !cache.dirty[docID] {
 		t.Fatal("expected document to remain dirty when lock not acquired")
 	}

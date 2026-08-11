@@ -8,7 +8,6 @@ import (
 	"github.com/koezuka404/notehub/entity"
 )
 
-// Test seams for error paths that are otherwise unreachable with valid inputs.
 var (
 	newAuditLogFn = entity.NewAuditLog
 	jsonMarshalFn = json.Marshal

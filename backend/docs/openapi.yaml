@@ -5,12 +5,10 @@ info:
   description: |
     NoteHub REST API および WebSocket 仕様。
 
-    ## 認証
     - Access Token: `Authorization: Bearer <token>` ヘッダー（15分有効）
     - Refresh Token: HttpOnly Cookie `notehub_refresh_token`（`/api/auth` パス）
     - CSRF: Cookie `notehub_csrf_token` と Header `X-CSRF-Token` の Double Submit（`POST /api/auth/refresh`, `POST /api/auth/logout`）
 
-    ## レスポンス形式
     成功時は `{ "data": ... }`、失敗時は `{ "error": { "code", "message", "requestId?" } }`。
 
 servers:

@@ -11,7 +11,6 @@ import (
 	"unicode/utf8"
 )
 
-// document_helpers.go
 
 const maxDocumentTitleLength = 100
 const maxDocumentContentBytes = 512 * 1024
@@ -24,7 +23,6 @@ type IDocumentUsecase interface {
 	DeleteDocument(ctx context.Context, input DeleteDocumentInput) (*DeleteDocumentOutput, error)
 }
 
-// document_cache.go
 
 type DocumentContentState struct {
 	Content   string
@@ -48,7 +46,6 @@ type IAutoSaveLockStore interface {
 	Unlock(ctx context.Context, key string) error
 }
 
-// document_flush.go
 
 type IDocumentFlushService interface {
 	FlushDocument(ctx context.Context, documentID uuid.UUID) error
@@ -56,7 +53,6 @@ type IDocumentFlushService interface {
 	FlushWorkspaceDocuments(ctx context.Context, workspaceID uuid.UUID) error
 }
 
-// document_websocket_notifier.go
 
 type IDocumentWebSocketNotifier interface {
 	NotifyDocumentCreated(workspaceID uuid.UUID, documentID uuid.UUID, title, updatedBy, updatedAt string) error
@@ -161,7 +157,6 @@ func (uc *DocumentUseCase) docContent(ctx context.Context, doc *entity.Document)
 	return doc.Content, nil
 }
 
-// document_create.go
 
 type CreateDocumentInput struct {
 	UserID      uuid.UUID
@@ -237,7 +232,6 @@ func (uc *DocumentUseCase) CreateDocument(ctx context.Context, input CreateDocum
 	}, nil
 }
 
-// document_get.go
 
 type GetDocumentInput struct {
 	UserID     uuid.UUID
@@ -277,7 +271,6 @@ func (uc *DocumentUseCase) GetDocument(ctx context.Context, input GetDocumentInp
 	}, nil
 }
 
-// document_list.go
 
 type ListDocumentsInput struct {
 	UserID      uuid.UUID
@@ -313,7 +306,6 @@ func (uc *DocumentUseCase) ListDocuments(ctx context.Context, input ListDocument
 	return items, nil
 }
 
-// document_update.go
 
 type UpdateDocumentInput struct {
 	UserID     uuid.UUID
@@ -396,7 +388,6 @@ func (uc *DocumentUseCase) UpdateDocument(ctx context.Context, input UpdateDocum
 	return output, nil
 }
 
-// document_delete.go
 
 type DeleteDocumentInput struct {
 	UserID     uuid.UUID

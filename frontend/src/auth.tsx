@@ -107,7 +107,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         api.stopProactiveRefresh();
       }
     } catch {
-      // ログアウトは冪等なので失敗してもローカル状態はクリアする
     } finally {
       accessTokenRef.current = null;
       setAccessToken(null);

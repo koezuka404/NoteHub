@@ -308,5 +308,4 @@ func TestDocumentCacheStore_MarkCleanEncodeError(t *testing.T) {
 	}
 }
 
-// ensure usecase type is referenced
 var _ = usecase.DocumentContentState{}
