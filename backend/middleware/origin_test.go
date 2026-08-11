@@ -63,6 +63,40 @@ func TestOriginValidationMiddleware_DevelopmentDefaults(t *testing.T) {
 	}
 }
 
+func TestOriginValidationMiddleware_SkipsWhenNoAllowedOrigins(t *testing.T) {
+	rec := runOriginValidationWithConfig(t, &config.Config{
+		Environment:    config.EnvironmentProduction,
+		AllowedOrigins: nil,
+	}, "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+}
+
+func TestOriginValidationMiddleware_SkipsBlankConfiguredOrigins(t *testing.T) {
+	rec := runOriginValidationWithConfig(t, &config.Config{
+		Environment:    config.EnvironmentProduction,
+		AllowedOrigins: []string{" ", "https://app.example.com"},
+	}, "https://app.example.com", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+}
+
+func TestOriginValidationMiddleware_AllowsExactReferer(t *testing.T) {
+	rec := runOriginValidation(t, []string{"https://app.example.com"}, "", "https://app.example.com")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+}
+
+func TestOriginValidationMiddleware_RejectsUnknownReferer(t *testing.T) {
+	rec := runOriginValidation(t, []string{"https://app.example.com"}, "", "https://evil.example.com/path")
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d", rec.Code)
+	}
+}
+
 func runOriginValidation(t *testing.T, origins []string, originHeader, refererHeader string) *httptest.ResponseRecorder {
 	t.Helper()
 	return runOriginValidationWithConfig(t, &config.Config{

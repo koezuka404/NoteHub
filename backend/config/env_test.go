@@ -208,6 +208,39 @@ func TestParseEnvironment(t *testing.T) {
 	}
 }
 
+func TestNormalizeCookieSameSite(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"none", "None"},
+		{" NONE ", "None"},
+		{"strict", "Strict"},
+		{" STRICT ", "Strict"},
+		{"lax", "Lax"},
+		{" LAX ", "Lax"},
+		{"Custom", "Custom"},
+		{"  Padded  ", "Padded"},
+	}
+	for _, tc := range cases {
+		if got := normalizeCookieSameSite(tc.in); got != tc.want {
+			t.Fatalf("normalizeCookieSameSite(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestLoadFromEnv_NormalizesCookieSameSite(t *testing.T) {
+	env := validEnv()
+	env["COOKIE_SAME_SITE"] = "none"
+	cfg, err := LoadFromEnv(getenvFrom(env))
+	if err != nil {
+		t.Fatalf("LoadFromEnv: %v", err)
+	}
+	if cfg.CookieSameSite != "None" {
+		t.Fatalf("CookieSameSite = %q, want None", cfg.CookieSameSite)
+	}
+}
+
 func TestHelperFunctions(t *testing.T) {
 	if got := valueOrDefault("  ", "fallback"); got != "fallback" {
 		t.Fatalf("valueOrDefault = %q", got)

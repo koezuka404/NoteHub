@@ -7,6 +7,9 @@ node_modules/
 frontend/dist/
 frontend/coverage/
 
+# Go module cache (local)
+backend/.gomodcache/
+
 # Go test coverage
 *.out
 

@@ -86,9 +86,9 @@ describe.sequential('DocumentVersionDetailPage', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('保存')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: '保存' })).toBeInTheDocument();
       expect(screen.getByDisplayValue('version content')).toBeInTheDocument();
-      expect(screen.getByText(/Doc Title/)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: '← Doc Title' })).toBeInTheDocument();
       expect(screen.getByText(/実施者: Alice/)).toBeInTheDocument();
     });
   });
@@ -146,7 +146,7 @@ describe.sequential('DocumentVersionDetailPage', () => {
   it('skips load without access token', async () => {
     setMockAuth({ accessToken: null });
     renderPage();
-    await waitFor(() => expect(screen.queryByText('保存')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('heading', { name: '保存' })).not.toBeInTheDocument());
     expect(api.getVersion).not.toHaveBeenCalled();
   });
 

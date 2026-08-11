@@ -356,4 +356,21 @@ describe.sequential('DocumentEditorPage', () => {
     await invokeWsHandler(handlerName);
     await waitFor(() => expect(screen.getByTestId(redirectTestId)).toBeInTheDocument());
   });
+
+  it('shows member badge without host notice', async () => {
+    vi.mocked(api.getWorkspace).mockResolvedValue({ ...workspace, role: 'member' });
+    renderPage();
+    await waitFor(() => expect(screen.getByDisplayValue('Doc Title')).toBeInTheDocument());
+    expect(window.document.querySelector('.role-badge')).toHaveTextContent('メンバー');
+    expect(screen.queryByText('ワークスペースの設定変更ができます')).not.toBeInTheDocument();
+  });
+
+  it('hides role badge when workspace role is empty', async () => {
+    vi.mocked(api.getWorkspace).mockResolvedValue({ ...workspace, role: '' as 'host' });
+    renderPage();
+    await waitFor(() => expect(screen.getByDisplayValue('Doc Title')).toBeInTheDocument());
+    expect(window.document.querySelector('.host-badge')).not.toBeInTheDocument();
+    expect(window.document.querySelector('.role-badge')).not.toBeInTheDocument();
+    expect(screen.queryByText('ワークスペースの設定変更ができます')).not.toBeInTheDocument();
+  });
 });

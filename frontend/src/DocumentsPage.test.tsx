@@ -169,6 +169,11 @@ describe.sequential('DocumentsPage', () => {
     expect(screen.queryByLabelText('削除理由')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'ワークスペースを削除' }));
     await user.type(screen.getByLabelText('削除理由'), 'cleanup');
+    await user.click(screen.getByRole('button', { name: 'キャンセル' }));
+    expect(screen.queryByLabelText('削除理由')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'ワークスペースを削除' }));
+    await user.type(screen.getByLabelText('削除理由'), 'cleanup');
     vi.spyOn(window, 'confirm').mockReturnValueOnce(false);
     await user.click(screen.getByRole('button', { name: '削除する' }));
     expect(api.deleteWorkspace).not.toHaveBeenCalled();

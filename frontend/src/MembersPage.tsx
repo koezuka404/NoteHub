@@ -39,10 +39,7 @@ export default function MembersPage() {
   const isHost = workspace?.role === 'host';
 
   const loadMembers = useCallback(async () => {
-    if (!accessToken || !workspaceId) {
-      return;
-    }
-    const items = await listMembers(accessToken, workspaceId);
+    const items = await listMembers(accessToken!, workspaceId);
     setMembers(items);
   }, [accessToken, workspaceId]);
 

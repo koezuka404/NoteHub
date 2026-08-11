@@ -12,7 +12,9 @@ function resetApiState() {
   api.configureAuthHandlers(null);
   api.stopProactiveRefresh();
   clearCsrfCookie();
-  sessionStorage.removeItem('notehub_session_hint');
+  if (typeof sessionStorage !== 'undefined') {
+    sessionStorage.removeItem('notehub_session_hint');
+  }
   vi.unstubAllGlobals();
   vi.useRealTimers();
 }
@@ -237,6 +239,52 @@ describe('auth endpoints', () => {
     await expect(api.refresh()).resolves.toMatchObject({ accessToken: 't2' });
     await expect(api.me('t2')).resolves.toEqual({ user });
     await expect(api.logout('t2')).resolves.toEqual({ message: 'ok' });
+  });
+
+  it('refresh defaults tokenType to Bearer', async () => {
+    mockFetch({
+      ok: true,
+      data: {
+        accessToken: 't2',
+        expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+      },
+    });
+    await expect(api.refresh()).resolves.toMatchObject({ accessToken: 't2', tokenType: 'Bearer' });
+  });
+
+  it('logout omits CSRF header when token is unavailable', async () => {
+    const fetchMock = mockFetch({ ok: true, data: { message: 'ok' } });
+    await expect(api.logout('t1')).resolves.toEqual({ message: 'ok' });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Headers;
+    expect(headers.get('X-CSRF-Token')).toBeNull();
+    expect(headers.get('Authorization')).toBe('Bearer t1');
+  });
+
+  it('handles missing sessionStorage for session hint', async () => {
+    const sessionStorageBackup = globalThis.sessionStorage;
+    vi.stubGlobal('sessionStorage', undefined);
+    try {
+      expect(api.hasSessionHint()).toBe(false);
+      mockFetch([
+        {
+          ok: true,
+          data: {
+            user,
+            accessToken: 't1',
+            tokenType: 'Bearer',
+            expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+          },
+        },
+        { ok: true, data: { message: 'ok' } },
+      ]);
+      await api.login('user@example.com', 'abc12345');
+      expect(api.hasSessionHint()).toBe(false);
+      await expect(api.logout('t1')).resolves.toEqual({ message: 'ok' });
+      expect(api.hasSessionHint()).toBe(false);
+    } finally {
+      vi.stubGlobal('sessionStorage', sessionStorageBackup);
+    }
   });
 });
 
