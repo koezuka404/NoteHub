@@ -491,20 +491,15 @@ body {
 
 .version-actions {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 16px;
   margin-top: 16px;
-}
-
-.version-back-link {
-  width: auto;
-  min-width: 120px;
-  padding: 12px 16px;
 }
 
 .create-document-form {
   display: grid;
   gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 0;
 }
 
 .create-document-form .field {
@@ -693,6 +688,30 @@ body {
 
 .member-section {
   margin-bottom: 28px;
+}
+
+.documents-section + .documents-section {
+  margin-top: 28px;
+  padding-top: 28px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.documents-section-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.documents-section-header .section-title {
+  margin-bottom: 0;
+}
+
+.documents-create-form {
+  flex: 1 1 280px;
+  justify-content: flex-end;
 }
 
 .section-title {

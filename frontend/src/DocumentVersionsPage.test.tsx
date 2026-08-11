@@ -22,6 +22,7 @@ const document = {
   updatedBy: 'u1',
   updatedAt: '2026-01-01T00:00:00Z',
 };
+const members = [{ userId: 'u1', name: 'Alice', email: 'a@b.com', status: 'active', role: 'host', joinedAt: '2026-01-01' }];
 const versions = [
   {
     id: 'v1',
@@ -55,6 +56,7 @@ describe('DocumentVersionsPage', () => {
     vi.mocked(api.getWorkspace).mockResolvedValue(workspace);
     vi.mocked(api.getDocument).mockResolvedValue(document);
     vi.mocked(api.listVersions).mockResolvedValue(versions);
+    vi.mocked(api.listMembers).mockResolvedValue(members);
   });
 
   it('loads versions', async () => {
@@ -69,6 +71,7 @@ describe('DocumentVersionsPage', () => {
       'href',
       '/workspaces/ws-1/documents/d1/versions/v1',
     );
+    expect(screen.getByText(/操作者: Alice/)).toBeInTheDocument();
   });
 
   it('shows empty state', async () => {

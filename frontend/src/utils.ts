@@ -136,3 +136,7 @@ export function formatVersionType(type: string): string {
       return type;
   }
 }
+
+export function resolveMemberName(userId: string, namesByUserId: ReadonlyMap<string, string>): string {
+  return namesByUserId.get(userId) ?? '不明';
+}

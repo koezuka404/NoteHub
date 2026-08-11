@@ -90,14 +90,13 @@ describe.sequential('DocumentsPage', () => {
 
     renderPage();
 
-    await waitFor(() => expect(screen.getByLabelText('タイトル')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText('新しいドキュメント名')).toBeInTheDocument());
 
-    await user.type(screen.getByLabelText('タイトル'), 'New Doc');
-    await user.type(screen.getAllByTestId('monaco-editor')[0], 'body');
+    await user.type(screen.getByLabelText('新しいドキュメント名'), 'New Doc');
     await user.click(screen.getByRole('button', { name: '作成' }));
 
     await waitFor(() => {
-      expect(api.createDocument).toHaveBeenCalledWith('access-token', 'ws-1', 'New Doc', 'body');
+      expect(api.createDocument).toHaveBeenCalledWith('access-token', 'ws-1', 'New Doc');
     });
   });
 
@@ -107,11 +106,11 @@ describe.sequential('DocumentsPage', () => {
 
     renderPage();
 
-    await waitFor(() => expect(screen.getByLabelText('タイトル')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText('新しいドキュメント名')).toBeInTheDocument());
     await user.click(screen.getByRole('button', { name: '作成' }));
     expect(api.createDocument).not.toHaveBeenCalled();
 
-    await user.type(screen.getByLabelText('タイトル'), 'New Doc');
+    await user.type(screen.getByLabelText('新しいドキュメント名'), 'New Doc');
     await user.click(screen.getByRole('button', { name: '作成' }));
 
     await waitFor(() => {

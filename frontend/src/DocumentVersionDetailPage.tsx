@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { getDocument, getVersion, getWorkspace, restoreVersion } from './api';
+import { getDocument, getVersion, getWorkspace, listMembers, restoreVersion } from './api';
 import { useAuth } from './auth';
 import AppLayout from './AppLayout';
 import DocumentMonacoEditor from './DocumentMonacoEditor';
-import { formatDate, formatVersionType, getErrorMessage } from './utils';
+import { formatDate, formatVersionType, getErrorMessage, resolveMemberName } from './utils';
 
 export default function DocumentVersionDetailPage() {
   const { workspaceId = '', documentId = '', versionId = '' } = useParams();
@@ -13,6 +13,7 @@ export default function DocumentVersionDetailPage() {
   const [workspaceName, setWorkspaceName] = useState('');
   const [documentTitle, setDocumentTitle] = useState('');
   const [versionType, setVersionType] = useState('');
+  const [createdByName, setCreatedByName] = useState('不明');
   const [createdAt, setCreatedAt] = useState('');
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
@@ -28,18 +29,21 @@ export default function DocumentVersionDetailPage() {
     setError('');
     setSuccess('');
     try {
-      const [workspace, document, version] = await Promise.all([
+      const [workspace, document, version, members] = await Promise.all([
         getWorkspace(accessToken, workspaceId),
         getDocument(accessToken, documentId),
         getVersion(accessToken, documentId, versionId),
+        listMembers(accessToken, workspaceId),
       ]);
       if (document.workspaceId !== workspaceId) {
         setError('ドキュメントがワークスペースに属していません');
         return;
       }
+      const memberNames = new Map(members.map((member) => [member.userId, member.name]));
       setWorkspaceName(workspace.name);
       setDocumentTitle(document.title);
       setVersionType(version.versionType);
+      setCreatedByName(resolveMemberName(version.createdBy, memberNames));
       setCreatedAt(version.createdAt);
       setContent(version.content);
     } catch (err) {
@@ -99,7 +103,8 @@ export default function DocumentVersionDetailPage() {
           </Link>
           <h2>{formatVersionType(versionType)}</h2>
           <p className="hint-inline">
-            {documentTitle} / {workspaceName} / 保存日時: {formatDate(createdAt)}
+            {documentTitle} / {workspaceName} / 保存日時: {formatDate(createdAt)} / 操作者:{' '}
+            {createdByName}
           </p>
         </div>
 
@@ -116,9 +121,9 @@ export default function DocumentVersionDetailPage() {
           </button>
           <Link
             to={`/workspaces/${workspaceId}/documents/${documentId}`}
-            className="button compact-button secondary-button link-as-button version-back-link"
+            className="link-button"
           >
-            エディタへ戻る
+            ← {documentTitle || '編集画面'}
           </Link>
         </div>
       </section>

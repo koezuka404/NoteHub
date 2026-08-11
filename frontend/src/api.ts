@@ -32,12 +32,23 @@ type TokenRefreshResult = {
   accessToken: string;
   expiresAt: string;
   csrfToken?: string;
+  tokenType?: string;
 };
+
+const CSRF_STORAGE_KEY = 'notehub_csrf_token';
 
 let storedCsrfToken: string | null = null;
 
 function setStoredCsrfToken(token: string | null) {
   storedCsrfToken = token;
+  if (typeof sessionStorage === 'undefined') {
+    return;
+  }
+  if (token) {
+    sessionStorage.setItem(CSRF_STORAGE_KEY, token);
+  } else {
+    sessionStorage.removeItem(CSRF_STORAGE_KEY);
+  }
 }
 
 function applyCsrfToken(token?: string) {
@@ -61,7 +72,7 @@ function resolveApiUrl(path: string): string {
 }
 
 let authHandlers: AuthHandlers | null = null;
-let refreshPromise: Promise<string> | null = null;
+let refreshPromise: Promise<TokenRefreshResult> | null = null;
 let proactiveRefreshTimer: number | null = null;
 let accessTokenExpiresAt: string | null = null;
 const accessTokenListeners = new Set<AccessTokenListener>();
@@ -140,7 +151,7 @@ function isRefreshableAuthError(status: number, code: string | undefined): boole
   return status === 401 && code === 'ACCESS_TOKEN_EXPIRED';
 }
 
-async function refreshAccessToken(): Promise<string> {
+function performTokenRefresh(): Promise<TokenRefreshResult> {
   if (refreshPromise) {
     return refreshPromise;
   }
@@ -151,14 +162,11 @@ async function refreshAccessToken(): Promise<string> {
         '/api/auth/refresh',
         {
           method: 'POST',
-          headers: {
-            'X-CSRF-Token': getCsrfToken(),
-          },
+          headers: csrfRequestHeaders(),
         },
         { skipAuthRetry: true },
       );
-      applyTokenRefreshResult(result);
-      return result.accessToken;
+      return applyTokenRefreshResult(result);
     } catch {
       clearStoredAuthState();
       authHandlers?.onAuthFailed();
@@ -175,6 +183,11 @@ async function refreshAccessToken(): Promise<string> {
   return refreshPromise;
 }
 
+async function refreshAccessToken(): Promise<string> {
+  const result = await performTokenRefresh();
+  return result.accessToken;
+}
+
 export async function ensureFreshAccessToken(currentToken: string | null): Promise<string | null> {
   if (currentToken && !isAccessTokenExpiredOrExpiringSoon(0)) {
     return currentToken;
@@ -184,6 +197,12 @@ export async function ensureFreshAccessToken(currentToken: string | null): Promi
   } catch {
     return null;
   }
+}
+
+function csrfRequestHeaders(): Record<string, string> {
+  return {
+    'X-CSRF-Token': getCsrfToken(),
+  };
 }
 
 async function request<T>(
@@ -240,6 +259,13 @@ export function getCsrfToken(): string {
   if (storedCsrfToken) {
     return storedCsrfToken;
   }
+  if (typeof sessionStorage !== 'undefined') {
+    const fromStorage = sessionStorage.getItem(CSRF_STORAGE_KEY);
+    if (fromStorage) {
+      storedCsrfToken = fromStorage;
+      return fromStorage;
+    }
+  }
   const match = document.cookie.match(/(?:^|;\s*)notehub_csrf_token=([^;]*)/);
   return match ? decodeURIComponent(match[1]) : '';
 }
@@ -274,30 +300,27 @@ export async function login(email: string, password: string) {
 }
 
 export async function refresh() {
-  const result = await request<LoginResult>(
-    '/api/auth/refresh',
-    {
-      method: 'POST',
-      headers: {
-        'X-CSRF-Token': getCsrfToken(),
-      },
-    },
-    { skipAuthRetry: true },
-  );
-  applyTokenRefreshResult(result);
-  return result;
+  const result = await performTokenRefresh();
+  return {
+    accessToken: result.accessToken,
+    tokenType: result.tokenType ?? 'Bearer',
+    expiresAt: result.expiresAt,
+    csrfToken: result.csrfToken,
+  } satisfies LoginResult;
 }
 
 export async function logout(accessToken: string) {
-  const result = await api<{ message: string }>('/api/auth/logout', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'X-CSRF-Token': getCsrfToken(),
-    },
-  });
-  setStoredCsrfToken(null);
-  return result;
+  try {
+    return await api<{ message: string }>('/api/auth/logout', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        ...csrfRequestHeaders(),
+      },
+    });
+  } finally {
+    clearStoredAuthState();
+  }
 }
 
 export function me(accessToken: string) {

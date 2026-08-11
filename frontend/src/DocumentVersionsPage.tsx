@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { getDocument, getWorkspace, listVersions, type VersionListItem } from './api';
+import { getDocument, getWorkspace, listMembers, listVersions, type VersionListItem } from './api';
 import { useAuth } from './auth';
 import AppLayout from './AppLayout';
-import { formatDate, formatVersionType, getErrorMessage } from './utils';
+import { formatDate, formatVersionType, getErrorMessage, resolveMemberName } from './utils';
 
 export default function DocumentVersionsPage() {
   const { workspaceId = '', documentId = '' } = useParams();
@@ -11,6 +11,7 @@ export default function DocumentVersionsPage() {
   const [workspaceName, setWorkspaceName] = useState('');
   const [documentTitle, setDocumentTitle] = useState('');
   const [versions, setVersions] = useState<VersionListItem[]>([]);
+  const [memberNames, setMemberNames] = useState<Map<string, string>>(() => new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -21,10 +22,11 @@ export default function DocumentVersionsPage() {
     setLoading(true);
     setError('');
     try {
-      const [workspace, document, items] = await Promise.all([
+      const [workspace, document, items, members] = await Promise.all([
         getWorkspace(accessToken, workspaceId),
         getDocument(accessToken, documentId),
         listVersions(accessToken, documentId),
+        listMembers(accessToken, workspaceId),
       ]);
       if (document.workspaceId !== workspaceId) {
         setError('ドキュメントがワークスペースに属していません');
@@ -33,6 +35,7 @@ export default function DocumentVersionsPage() {
       setWorkspaceName(workspace.name);
       setDocumentTitle(document.title);
       setVersions(items);
+      setMemberNames(new Map(members.map((member) => [member.userId, member.name])));
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -76,7 +79,10 @@ export default function DocumentVersionsPage() {
                   className="list-button list-link"
                 >
                   <span className="list-title">{formatVersionType(version.versionType)}</span>
-                  <span className="list-meta">保存日時: {formatDate(version.createdAt)}</span>
+                  <span className="list-meta">
+                    保存日時: {formatDate(version.createdAt)} · 操作者:{' '}
+                    {resolveMemberName(version.createdBy, memberNames)}
+                  </span>
                 </Link>
               </li>
             ))}

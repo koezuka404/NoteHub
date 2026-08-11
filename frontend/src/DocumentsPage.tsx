@@ -13,7 +13,6 @@ import {
 } from './api';
 import { useAuth } from './auth';
 import AppLayout from './AppLayout';
-import DocumentMonacoEditor from './DocumentMonacoEditor';
 import HostPanel from './HostPanel';
 import WorkspaceHeader from './WorkspaceHeader';
 import { connectWorkspaceWebSocket } from './workspaceWs';
@@ -26,7 +25,6 @@ export default function DocumentsPage() {
   const [workspace, setWorkspace] = useState<WorkspaceDetail | null>(null);
   const [documents, setDocuments] = useState<DocumentListItem[]>([]);
   const [documentTitle, setDocumentTitle] = useState('');
-  const [documentContent, setDocumentContent] = useState('');
   const [creating, setCreating] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -136,10 +134,8 @@ export default function DocumentsPage() {
         accessToken,
         workspaceId,
         documentTitle.trim(),
-        documentContent,
       );
       setDocumentTitle('');
-      setDocumentContent('');
       void navigate(`/workspaces/${workspaceId}/documents/${created.id}`);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -196,52 +192,50 @@ export default function DocumentsPage() {
           role={workspace?.role}
           activeTab="documents"
         />
-        <form className="create-document-form" onSubmit={handleCreateDocument}>
-          <div className="field">
-            <label htmlFor="document-title">タイトル</label>
-            <input
-              id="document-title"
-              value={documentTitle}
-              onChange={(event) => setDocumentTitle(event.target.value)}
-              placeholder="新しいドキュメント名"
-              maxLength={100}
-              required
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="document-content">本文</label>
-            <DocumentMonacoEditor
-              value={documentContent}
-              onChange={setDocumentContent}
-              height="240px"
-            />
-          </div>
-          <button type="submit" className="button compact-button" disabled={creating}>
-            {creating ? '作成中...' : '作成'}
-          </button>
-        </form>
-        {loading ? <p className="loading">読み込み中...</p> : null}
-        <ul className="item-list">
-          {documents.map((document) => (
-            <li key={document.id} className="document-list-item">
-              <Link
-                to={`/workspaces/${workspaceId}/documents/${document.id}`}
-                className="list-button list-link document-list-link"
-              >
-                <span className="list-title">{document.title}</span>
-                <span className="list-meta">更新: {formatDate(document.updatedAt)}</span>
-              </Link>
-              <button
-                type="button"
-                className="document-list-delete"
-                disabled={deletingDocumentId === document.id}
-                onClick={() => void handleDeleteDocument(document.id)}
-              >
-                {deletingDocumentId === document.id ? '削除中...' : '削除'}
+
+        <div className="documents-section">
+          <div className="documents-section-header">
+            <h3 className="section-title">ドキュメント一覧</h3>
+            <form className="inline-form documents-create-form" onSubmit={handleCreateDocument}>
+              <input
+                value={documentTitle}
+                onChange={(event) => setDocumentTitle(event.target.value)}
+                placeholder="新しいドキュメント名"
+                maxLength={100}
+                required
+                aria-label="新しいドキュメント名"
+              />
+              <button type="submit" className="button compact-button" disabled={creating}>
+                {creating ? '作成中...' : '作成'}
               </button>
-            </li>
-          ))}
-        </ul>
+            </form>
+          </div>
+          {loading ? <p className="loading">読み込み中...</p> : null}
+          {!loading && documents.length === 0 ? (
+            <p className="hint-inline">ドキュメントはまだありません</p>
+          ) : null}
+          <ul className="item-list">
+            {documents.map((document) => (
+              <li key={document.id} className="document-list-item">
+                <Link
+                  to={`/workspaces/${workspaceId}/documents/${document.id}`}
+                  className="list-button list-link document-list-link"
+                >
+                  <span className="list-title">{document.title}</span>
+                  <span className="list-meta">更新: {formatDate(document.updatedAt)}</span>
+                </Link>
+                <button
+                  type="button"
+                  className="document-list-delete"
+                  disabled={deletingDocumentId === document.id}
+                  onClick={() => void handleDeleteDocument(document.id)}
+                >
+                  {deletingDocumentId === document.id ? '削除中...' : '削除'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
 
         {isHost ? (
           <HostPanel

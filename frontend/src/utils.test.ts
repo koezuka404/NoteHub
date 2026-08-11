@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getErrorMessage, formatRole, formatUserStatus, formatUnavailableReason, formatDate, formatVersionType } from './utils';
+import { getErrorMessage, formatRole, formatUserStatus, formatUnavailableReason, formatDate, formatVersionType, resolveMemberName } from './utils';
 
 describe('getErrorMessage', () => {
   it('maps known api error codes', () => {
@@ -55,5 +55,11 @@ describe('formatters', () => {
     expect(formatVersionType('before_restore')).toBe('復元前');
     expect(formatVersionType('restore')).toBe('復元');
     expect(formatVersionType('other')).toBe('other');
+  });
+
+  it('resolveMemberName', () => {
+    const names = new Map([['u1', 'Alice']]);
+    expect(resolveMemberName('u1', names)).toBe('Alice');
+    expect(resolveMemberName('missing', names)).toBe('不明');
   });
 });

@@ -32,6 +32,7 @@ const version = {
   createdBy: 'u1',
   createdAt: '2026-01-01T00:00:00Z',
 };
+const members = [{ userId: 'u1', name: 'Alice', email: 'a@b.com', status: 'active', role: 'host', joinedAt: '2026-01-01' }];
 
 function renderPage(initialEntry = '/workspaces/ws-1/documents/doc-1/versions/v1') {
   return renderWithProviders(
@@ -73,6 +74,7 @@ describe.sequential('DocumentVersionDetailPage', () => {
     vi.mocked(api.getWorkspace).mockResolvedValue(workspace);
     vi.mocked(api.getDocument).mockResolvedValue(document);
     vi.mocked(api.getVersion).mockResolvedValue(version);
+    vi.mocked(api.listMembers).mockResolvedValue(members);
     vi.mocked(api.restoreVersion).mockResolvedValue({
       documentId: 'doc-1',
       versionId: 'v1',
@@ -87,6 +89,7 @@ describe.sequential('DocumentVersionDetailPage', () => {
       expect(screen.getByText('保存')).toBeInTheDocument();
       expect(screen.getByDisplayValue('version content')).toBeInTheDocument();
       expect(screen.getByText(/Doc Title/)).toBeInTheDocument();
+      expect(screen.getByText(/操作者: Alice/)).toBeInTheDocument();
     });
   });
 

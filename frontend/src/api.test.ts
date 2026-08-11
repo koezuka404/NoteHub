@@ -12,6 +12,7 @@ function resetApiState() {
   api.configureAuthHandlers(null);
   api.stopProactiveRefresh();
   clearCsrfCookie();
+  sessionStorage.removeItem('notehub_csrf_token');
   vi.unstubAllGlobals();
   vi.useRealTimers();
 }
@@ -51,6 +52,11 @@ describe('api helpers', () => {
     expect(api.getCsrfToken()).toBe('from-api');
     clearCsrfCookie();
     expect(api.getCsrfToken()).toBe('from-api');
+  });
+
+  it('getCsrfToken restores token from sessionStorage after reload', () => {
+    sessionStorage.setItem('notehub_csrf_token', 'stored-token');
+    expect(api.getCsrfToken()).toBe('stored-token');
   });
 
   it('isAccessTokenExpiredOrExpiringSoon handles missing and invalid expiry', () => {
@@ -167,6 +173,25 @@ describe('api helpers', () => {
     await expect(Promise.all([first, second])).resolves.toEqual(['t2', 't2']);
   });
 
+  it('deduplicates concurrent refresh calls', async () => {
+    sessionStorage.setItem('notehub_csrf_token', 'csrf');
+    mockFetch({
+      ok: true,
+      data: {
+        accessToken: 't2',
+        tokenType: 'Bearer',
+        expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+        csrfToken: 'csrf-next',
+      },
+    });
+    const first = api.refresh();
+    const second = api.refresh();
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      expect.objectContaining({ accessToken: 't2' }),
+      expect.objectContaining({ accessToken: 't2' }),
+    ]);
+  });
+
   it('request retries once on ACCESS_TOKEN_EXPIRED', async () => {
     mockFetch([
       { ok: false, status: 401, error: { code: 'ACCESS_TOKEN_EXPIRED', message: 'expired' } },
@@ -191,8 +216,25 @@ describe('auth endpoints', () => {
   it('register login refresh logout me', async () => {
     mockFetch([
       { ok: true, data: { user, createdAt: '2026-01-01T00:00:00Z' } },
-      { ok: true, data: { user, accessToken: 't1', tokenType: 'Bearer', expiresAt: new Date(Date.now() + 3600_000).toISOString() } },
-      { ok: true, data: { accessToken: 't2', tokenType: 'Bearer', expiresAt: new Date(Date.now() + 3600_000).toISOString() } },
+      {
+        ok: true,
+        data: {
+          user,
+          accessToken: 't1',
+          tokenType: 'Bearer',
+          expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+          csrfToken: 'csrf-1',
+        },
+      },
+      {
+        ok: true,
+        data: {
+          accessToken: 't2',
+          tokenType: 'Bearer',
+          expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+          csrfToken: 'csrf-2',
+        },
+      },
       { ok: true, data: { user } },
       { ok: true, data: { message: 'ok' } },
     ]);

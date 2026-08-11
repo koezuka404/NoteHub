@@ -97,17 +97,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     const token = accessTokenRef.current;
-    api.stopProactiveRefresh();
-    if (token) {
-      try {
+    try {
+      if (token) {
         await api.logout(token);
-      } catch {
-        // ログアウトは冪等なので失敗してもローカル状態はクリアする
+      } else {
+        api.stopProactiveRefresh();
       }
+    } catch {
+      // ログアウトは冪等なので失敗してもローカル状態はクリアする
+    } finally {
+      accessTokenRef.current = null;
+      setAccessToken(null);
+      setUser(null);
     }
-    accessTokenRef.current = null;
-    setAccessToken(null);
-    setUser(null);
   }, []);
 
   const value = useMemo(

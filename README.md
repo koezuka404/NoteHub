@@ -125,7 +125,29 @@ vercel deploy --prod
 
 ### 3. 仕上げ
 
-Vercel の本番 URL が確定したら、Render の `CORS_ALLOWED_ORIGINS` にその URL を設定し、API を再デプロイしてください。
+Vercel の本番 URL が確定したら、Render の Environment を設定して API を再デプロイしてください。
+
+| 変数 | 例 | 用途 |
+|------|-----|------|
+| `CORS_ALLOWED_ORIGINS` | `https://note-hub-three.vercel.app` | フロントからの API 通信 |
+| `PUBLIC_HTTP_URL` | `https://notehub-4uet.onrender.com` | **Render Dashboard に表示される実際の URL** |
+| `APP_ENV` | `production` | 本番設定 |
+| `COOKIE_SECURE` | `true` | HTTPS Cookie |
+| `COOKIE_SAME_SITE` | `None` | クロスオリジン Cookie（CSRF / Refresh 必須） |
+| `REDIS_URL` | Redis Internal URL | 本番必須 |
+
+Vercel の Environment:
+
+| 変数 | 例 |
+|------|-----|
+| `VITE_API_BASE_URL` | `https://notehub-4uet.onrender.com` |
+| `VITE_WS_BASE_URL` | `wss://notehub-4uet.onrender.com` |
+
+**注意:** `notehub-api.onrender.com` など Blueprint 名と異なる URL になることがあります。Dashboard の URL を使ってください。
+
+**CSRF（Double Submit Cookie）:** ログイン / リフレッシュ時に API が返す `csrfToken` をフロントが `sessionStorage` に保存し、`X-CSRF-Token` ヘッダーで送信します。Cookie が送れない場合（`COOKIE_SAME_SITE` 未設定など）は `/api/auth/refresh` が 403 になります。
+
+動作確認: `https://<your-api>/health` → `{"status":"ok"}`
 
 ## CI
 
