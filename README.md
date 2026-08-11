@@ -145,7 +145,7 @@ Vercel の Environment:
 
 **注意:** `notehub-api.onrender.com` など Blueprint 名と異なる URL になることがあります。Dashboard の URL を使ってください。
 
-**CSRF / セッション:** `POST /api/auth/refresh` と `POST /api/auth/logout` は **Origin 検証**（`CORS_ALLOWED_ORIGINS` と一致する `Origin` / `Referer`）で保護します。フロントは CSRF トークンを localStorage 等に保存しません。Render では `COOKIE_SAME_SITE=None` と `CORS_ALLOWED_ORIGINS=https://note-hub-three.vercel.app` が必須です。
+**CSRF / セッション:** `POST /api/auth/refresh` は **Origin 検証 + Refresh Cookie**、`POST /api/auth/logout` は **Origin 検証または Double Submit Cookie**（どちらか一方）で保護します。CSRF トークンは localStorage に保存せず、ログイン / リフレッシュ応答をメモリ上のみ保持します。
 
 動作確認: `https://<your-api>/health` → `{"status":"ok"}`
 

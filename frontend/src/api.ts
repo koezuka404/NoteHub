@@ -313,12 +313,17 @@ export async function refresh(): Promise<RefreshResult> {
 }
 
 export async function logout(accessToken: string) {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+  };
+  const csrfToken = getCsrfToken();
+  if (csrfToken) {
+    headers['X-CSRF-Token'] = csrfToken;
+  }
   try {
     return await api<{ message: string }>('/api/auth/logout', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
+      headers,
     });
   } finally {
     clearStoredAuthState();

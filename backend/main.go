@@ -221,6 +221,10 @@ func run() (exitCode int) {
 	})
 	requireRefreshMiddleware := appmiddleware.NewRequireRefreshTokenMiddleware(cfg.RefreshTokenCookieName)
 	originValidationMiddleware := appmiddleware.NewOriginValidationMiddleware(cfg)
+	originOrCSRFMiddleware := appmiddleware.NewOriginOrCSRFMiddleware(cfg, appmiddleware.CSRFConfig{
+		CookieName: cfg.CSRFTokenCookieName,
+		HeaderName: "X-CSRF-Token",
+	})
 	rateLimitMiddleware := appmiddleware.NewRateLimitMiddleware(tokenBuckets, appmiddleware.RateLimitConfig{
 		Capacity: cfg.RateLimitCapacity, RefillPerSecond: cfg.RateLimitRefillRate,
 	})
@@ -242,6 +246,7 @@ func run() (exitCode int) {
 		AuthMiddleware:      authMiddleware,
 		RequireRefreshToken: requireRefreshMiddleware,
 		OriginValidation:    originValidationMiddleware,
+		OriginOrCSRF:        originOrCSRFMiddleware,
 		CSRF:                csrfMiddleware,
 		RateLimit:           rateLimitMiddleware,
 	})
