@@ -103,7 +103,7 @@ export default function DocumentVersionDetailPage() {
           </Link>
           <h2>{formatVersionType(versionType)}</h2>
           <p className="hint-inline">
-            {documentTitle} / {workspaceName} / 保存日時: {formatDate(createdAt)} / 操作者:{' '}
+            {documentTitle} / {workspaceName} / 保存日時: {formatDate(createdAt)} / 実施者:{' '}
             {createdByName}
           </p>
         </div>

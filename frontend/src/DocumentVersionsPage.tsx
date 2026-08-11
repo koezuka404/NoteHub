@@ -79,9 +79,9 @@ export default function DocumentVersionsPage() {
                   className="list-button list-link"
                 >
                   <span className="list-title">{formatVersionType(version.versionType)}</span>
+                  <span className="list-meta">保存日時: {formatDate(version.createdAt)}</span>
                   <span className="list-meta">
-                    保存日時: {formatDate(version.createdAt)} · 操作者:{' '}
-                    {resolveMemberName(version.createdBy, memberNames)}
+                    実施者: {resolveMemberName(version.createdBy, memberNames)}
                   </span>
                 </Link>
               </li>

@@ -43,7 +43,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   CANNOT_SUSPEND_HOST: 'ホストを停止できません',
   ACCOUNT_ALREADY_SUSPENDED: 'このアカウントは既に停止されています',
   ACCOUNT_NOT_SUSPENDED: 'このアカウントは停止されていません',
-  CANNOT_REACTIVATE_SELF: '自分自身を復帰できません',
+  CANNOT_REACTIVATE_SELF: '自分自身の停止は解除できません',
   CANNOT_DELETE_SELF: '自分自身を削除できません',
   ACCOUNT_DELETED: 'このアカウントは削除されています',
   ACCOUNT_SUSPENDED: 'このアカウントは停止されています',

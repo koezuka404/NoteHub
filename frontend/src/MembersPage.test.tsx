@@ -151,10 +151,10 @@ describe.sequential('MembersPage', () => {
     await waitFor(() => expect(api.suspendMember).toHaveBeenCalledWith('access-token', 'ws-1', 'u2'));
 
     vi.spyOn(window, 'confirm').mockReturnValueOnce(false);
-    fireEvent.click(screen.getByRole('button', { name: '復帰' }));
+    fireEvent.click(screen.getByRole('button', { name: '停止解除' }));
     expect(api.reactivateMember).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: '復帰' }));
+    fireEvent.click(screen.getByRole('button', { name: '停止解除' }));
     await waitFor(() => expect(api.reactivateMember).toHaveBeenCalledWith('access-token', 'ws-1', 'u3'));
 
     vi.spyOn(window, 'confirm').mockReturnValueOnce(false);
@@ -231,7 +231,7 @@ describe.sequential('MembersPage', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'ワークスペースから削除' })[0]);
     await waitFor(() => expect(screen.getByText('メンバーが見つかりません')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: '復帰' }));
+    fireEvent.click(screen.getByRole('button', { name: '停止解除' }));
     await waitFor(() => expect(screen.getByText('このアカウントは停止されていません')).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: 'アカウント削除' }));
@@ -262,7 +262,7 @@ describe.sequential('MembersPage', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'ワークスペースから削除' })[0]);
     fireEvent.click(screen.getByRole('button', { name: '停止' }));
-    fireEvent.click(screen.getByRole('button', { name: '復帰' }));
+    fireEvent.click(screen.getByRole('button', { name: '停止解除' }));
     fireEvent.click(screen.getByRole('button', { name: 'アカウント削除' }));
 
     expect(api.removeMember).not.toHaveBeenCalled();
@@ -302,7 +302,7 @@ describe.sequential('MembersPage', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'ワークスペースから削除' })[0]);
     fireEvent.click(screen.getByRole('button', { name: '停止' }));
-    fireEvent.click(screen.getByRole('button', { name: '復帰' }));
+    fireEvent.click(screen.getByRole('button', { name: '停止解除' }));
     fireEvent.click(screen.getByRole('button', { name: 'アカウント削除' }));
 
     expect(api.removeMember).not.toHaveBeenCalled();

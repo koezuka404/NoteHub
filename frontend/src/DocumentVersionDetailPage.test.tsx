@@ -89,7 +89,7 @@ describe.sequential('DocumentVersionDetailPage', () => {
       expect(screen.getByText('保存')).toBeInTheDocument();
       expect(screen.getByDisplayValue('version content')).toBeInTheDocument();
       expect(screen.getByText(/Doc Title/)).toBeInTheDocument();
-      expect(screen.getByText(/操作者: Alice/)).toBeInTheDocument();
+      expect(screen.getByText(/実施者: Alice/)).toBeInTheDocument();
     });
   });
 

@@ -152,7 +152,7 @@ export default function MembersPage() {
     if (!accessToken || !workspaceId) {
       return;
     }
-    if (!window.confirm(`${targetName} のアカウントを復帰しますか？\n復帰後は再度ログインが必要です`)) {
+    if (!window.confirm(`${targetName} のアカウントの停止を解除しますか？\n停止解除後は再度ログインが必要です`)) {
       return;
     }
     setReactivatingUserId(targetUserId);
@@ -283,7 +283,7 @@ export default function MembersPage() {
                             disabled={reactivatingUserId === member.userId}
                             onClick={() => void handleReactivateMember(member.userId, member.name)}
                           >
-                            {reactivatingUserId === member.userId ? '復帰中...' : '復帰'}
+                            {reactivatingUserId === member.userId ? '停止解除中...' : '停止解除'}
                           </button>
                           <button
                             type="button"

@@ -97,7 +97,7 @@ func handleAccountUseCaseError(e echo.Context, err error) error {
 	case errors.Is(err, usecase.ErrCannotDeleteSelf):
 		return writeWorkspaceError(e, http.StatusConflict, "CANNOT_DELETE_SELF", "自分自身を削除できません")
 	case errors.Is(err, usecase.ErrCannotReactivateSelf):
-		return writeWorkspaceError(e, http.StatusConflict, "CANNOT_REACTIVATE_SELF", "自分自身を復帰できません")
+		return writeWorkspaceError(e, http.StatusConflict, "CANNOT_REACTIVATE_SELF", "自分自身の停止は解除できません")
 	case errors.Is(err, usecase.ErrAccountNotSuspended):
 		return writeWorkspaceError(e, http.StatusConflict, "ACCOUNT_NOT_SUSPENDED", "このアカウントは停止されていません")
 	case errors.Is(err, usecase.ErrCannotSuspendSelf):

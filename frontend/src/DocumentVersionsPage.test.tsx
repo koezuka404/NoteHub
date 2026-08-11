@@ -71,7 +71,7 @@ describe('DocumentVersionsPage', () => {
       'href',
       '/workspaces/ws-1/documents/d1/versions/v1',
     );
-    expect(screen.getByText(/操作者: Alice/)).toBeInTheDocument();
+    expect(screen.getByText(/実施者: Alice/)).toBeInTheDocument();
   });
 
   it('shows empty state', async () => {

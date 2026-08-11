@@ -283,6 +283,13 @@ export type LoginResult = {
   csrfToken?: string;
 };
 
+export type RefreshResult = {
+  accessToken: string;
+  tokenType: string;
+  expiresAt: string;
+  csrfToken?: string;
+};
+
 export function register(name: string, email: string, password: string) {
   return api<RegisterResult>('/api/auth/register', {
     method: 'POST',
@@ -299,14 +306,14 @@ export async function login(email: string, password: string) {
   return result;
 }
 
-export async function refresh() {
+export async function refresh(): Promise<RefreshResult> {
   const result = await performTokenRefresh();
   return {
     accessToken: result.accessToken,
     tokenType: result.tokenType ?? 'Bearer',
     expiresAt: result.expiresAt,
     csrfToken: result.csrfToken,
-  } satisfies LoginResult;
+  };
 }
 
 export async function logout(accessToken: string) {
