@@ -54,6 +54,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let active = true;
     (async () => {
       try {
+        if (!api.hasSessionHint()) {
+          return;
+        }
         const result = await api.refresh();
         if (!active) {
           return;

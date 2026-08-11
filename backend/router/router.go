@@ -30,7 +30,7 @@ func Register(e *echo.Echo, deps Deps) {
 		registerWebSocketRoutes(e, deps.WebSocket)
 	}
 	api := e.Group("/api")
-	registerAuthRoutes(api, deps.Auth, deps.AuthMiddleware, deps.RequireRefreshToken, deps.OriginValidation, deps.CSRF, deps.RateLimit)
+	registerAuthRoutes(api, deps.Auth, deps.AuthMiddleware, deps.RequireRefreshToken, deps.OriginValidation, deps.RateLimit)
 	registerWorkspaceRoutes(api, deps.Workspace, deps.Member, deps.Account, deps.Document, deps.AuthMiddleware, deps.RateLimit)
 	registerDocumentRoutes(api, deps.Document, deps.Version, deps.AuthMiddleware, deps.RateLimit)
 }

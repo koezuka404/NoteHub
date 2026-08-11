@@ -39,10 +39,12 @@ function AuthConsumer() {
 describe('AuthProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.setItem('notehub_session_hint', '1');
   });
 
   afterEach(() => {
     cleanup();
+    sessionStorage.removeItem('notehub_session_hint');
   });
 
   it('loads session on mount', async () => {
@@ -237,5 +239,16 @@ describe('AuthProvider', () => {
     screen.getByRole('button', { name: 'logout' }).click();
     await waitFor(() => expect(screen.getByTestId('auth-user')).toHaveTextContent('none'));
     expect(api.logout).not.toHaveBeenCalled();
+  });
+
+  it('skips refresh on mount without session hint', async () => {
+    sessionStorage.removeItem('notehub_session_hint');
+    render(
+      <AuthProvider>
+        <AuthConsumer />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('auth-loading')).toHaveTextContent('false'));
+    expect(api.refresh).not.toHaveBeenCalled();
   });
 });

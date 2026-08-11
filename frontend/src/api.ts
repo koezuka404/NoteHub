@@ -37,6 +37,24 @@ type TokenRefreshResult = {
 
 let storedCsrfToken: string | null = null;
 
+const SESSION_HINT_KEY = 'notehub_session_hint';
+
+function markSessionHint() {
+  if (typeof sessionStorage !== 'undefined') {
+    sessionStorage.setItem(SESSION_HINT_KEY, '1');
+  }
+}
+
+function clearSessionHint() {
+  if (typeof sessionStorage !== 'undefined') {
+    sessionStorage.removeItem(SESSION_HINT_KEY);
+  }
+}
+
+export function hasSessionHint(): boolean {
+  return typeof sessionStorage !== 'undefined' && sessionStorage.getItem(SESSION_HINT_KEY) === '1';
+}
+
 function setStoredCsrfToken(token: string | null) {
   storedCsrfToken = token;
 }
@@ -49,6 +67,7 @@ function applyCsrfToken(token?: string) {
 
 function clearStoredAuthState() {
   setStoredCsrfToken(null);
+  clearSessionHint();
   stopProactiveRefresh();
 }
 
@@ -133,6 +152,7 @@ function notifyAccessTokenRefresh(result: TokenRefreshResult) {
 
 function applyTokenRefreshResult(result: TokenRefreshResult): TokenRefreshResult {
   applyCsrfToken(result.csrfToken);
+  markSessionHint();
   notifyAccessTokenRefresh(result);
   return result;
 }
@@ -186,12 +206,6 @@ export async function ensureFreshAccessToken(currentToken: string | null): Promi
   } catch {
     return null;
   }
-}
-
-function csrfRequestHeaders(): Record<string, string> {
-  return {
-    'X-CSRF-Token': getCsrfToken(),
-  };
 }
 
 async function request<T>(
@@ -304,7 +318,6 @@ export async function logout(accessToken: string) {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
-        ...csrfRequestHeaders(),
       },
     });
   } finally {

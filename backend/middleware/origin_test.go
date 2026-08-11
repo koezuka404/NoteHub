@@ -9,6 +9,19 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+func TestOriginValidationMiddleware_SuccessWithDefaultHeader(t *testing.T) {
+	rec, ctx := runOriginValidationWithContext(t, &config.Config{
+		Environment:    config.EnvironmentProduction,
+		AllowedOrigins: []string{"https://app.example.com"},
+	}, "https://app.example.com", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if validated, ok := ctx.Get("origin_validated").(bool); !ok || !validated {
+		t.Fatal("expected origin_validated in context")
+	}
+}
+
 func TestOriginValidationMiddleware_AllowsListedOrigin(t *testing.T) {
 	rec := runOriginValidation(t, []string{"https://app.example.com"}, "https://app.example.com", "")
 	if rec.Code != http.StatusOK {
@@ -56,6 +69,30 @@ func runOriginValidation(t *testing.T, origins []string, originHeader, refererHe
 		Environment:    config.EnvironmentProduction,
 		AllowedOrigins: origins,
 	}, originHeader, refererHeader)
+}
+
+func runOriginValidationWithContext(t *testing.T, cfg *config.Config, originHeader, refererHeader string) (*httptest.ResponseRecorder, echo.Context) {
+	t.Helper()
+
+	e := echo.New()
+	var captured echo.Context
+	e.Use(NewOriginValidationMiddleware(cfg))
+	e.POST("/", func(ctx echo.Context) error {
+		captured = ctx
+		return ctx.NoContent(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	if originHeader != "" {
+		req.Header.Set("Origin", originHeader)
+	}
+	if refererHeader != "" {
+		req.Header.Set("Referer", refererHeader)
+	}
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	return rec, captured
 }
 
 func runOriginValidationWithConfig(t *testing.T, cfg *config.Config, originHeader, refererHeader string) *httptest.ResponseRecorder {

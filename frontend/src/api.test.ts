@@ -12,6 +12,7 @@ function resetApiState() {
   api.configureAuthHandlers(null);
   api.stopProactiveRefresh();
   clearCsrfCookie();
+  sessionStorage.removeItem('notehub_session_hint');
   vi.unstubAllGlobals();
   vi.useRealTimers();
 }

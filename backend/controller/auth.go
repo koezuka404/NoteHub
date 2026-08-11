@@ -116,6 +116,7 @@ func (c *AuthController) Logout(e echo.Context) error {
 		return writeAuthError(e, http.StatusUnauthorized, "ACCESS_TOKEN_INVALID", "ログイン情報が無効です再度ログインしてください")
 	}
 	csrfValidated, _ := e.Get("csrf_validated").(bool)
+	originValidated, _ := e.Get("origin_validated").(bool)
 	refreshToken := ""
 	if cookie, err := e.Cookie(c.cookies.RefreshName); err == nil {
 		refreshToken = cookie.Value
@@ -124,7 +125,7 @@ func (c *AuthController) Logout(e echo.Context) error {
 	_, err := c.auth.Logout(ctx, usecase.LogoutInput{
 		UserID: userID, AccessTokenJTI: jti, AccessTokenExp: expiresAt,
 		RefreshToken: refreshToken, IPAddress: e.RealIP(), UserAgent: e.Request().UserAgent(),
-		CSRFValidated: csrfValidated,
+		CSRFValidated: csrfValidated || originValidated,
 	})
 	if err != nil {
 		return handleAuthUseCaseError(e, err)

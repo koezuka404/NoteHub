@@ -32,6 +32,7 @@ func NewOriginValidationMiddleware(cfg *config.Config) echo.MiddlewareFunc {
 			origin := strings.TrimSpace(ctx.Request().Header.Get("Origin"))
 			if origin != "" {
 				if _, ok := allowed[origin]; ok {
+					ctx.Set("origin_validated", true)
 					return next(ctx)
 				}
 				return writeOriginError(ctx)
@@ -41,6 +42,7 @@ func NewOriginValidationMiddleware(cfg *config.Config) echo.MiddlewareFunc {
 			if referer != "" {
 				for allowedOrigin := range allowed {
 					if referer == allowedOrigin || strings.HasPrefix(referer, allowedOrigin+"/") {
+						ctx.Set("origin_validated", true)
 						return next(ctx)
 					}
 				}
