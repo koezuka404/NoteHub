@@ -21,6 +21,8 @@ type mockAuthUsecase struct {
 	logoutErr   error
 	meOut       *usecase.GetCurrentUserOutput
 	meErr       error
+	issueCSRFOut string
+	issueCSRFErr error
 }
 
 func (m *mockAuthUsecase) Register(context.Context, usecase.RegisterInput) (*usecase.RegisterOutput, error) {
@@ -37,6 +39,9 @@ func (m *mockAuthUsecase) Logout(context.Context, usecase.LogoutInput) (*usecase
 }
 func (m *mockAuthUsecase) GetCurrentUser(context.Context, usecase.GetCurrentUserInput) (*usecase.GetCurrentUserOutput, error) {
 	return m.meOut, m.meErr
+}
+func (m *mockAuthUsecase) IssueCSRFToken(context.Context) (string, error) {
+	return m.issueCSRFOut, m.issueCSRFErr
 }
 
 type mockAccountUsecase struct {

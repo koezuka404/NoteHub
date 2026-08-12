@@ -17,7 +17,7 @@ type Deps struct {
 	WebSocket           *controller.WebSocketController
 	AuthMiddleware      echo.MiddlewareFunc
 	RequireRefreshToken echo.MiddlewareFunc
-	OriginValidation    echo.MiddlewareFunc
+	SecFetchSite        echo.MiddlewareFunc
 	CSRF                echo.MiddlewareFunc
 	RateLimit           echo.MiddlewareFunc
 }
@@ -34,10 +34,11 @@ func Register(e *echo.Echo, deps Deps) {
 
 	api := e.Group("/api")
 
-	api.POST("/auth/register", deps.Auth.Register, deps.RateLimit)
-	api.POST("/auth/login", deps.Auth.Login, deps.RateLimit)
-	api.POST("/auth/refresh", deps.Auth.Refresh, deps.RequireRefreshToken, deps.OriginValidation, deps.RateLimit)
-	api.POST("/auth/logout", deps.Auth.Logout, deps.AuthMiddleware, deps.CSRF, deps.RateLimit)
+	api.GET("/auth/csrf", deps.Auth.IssueCSRF, deps.SecFetchSite, deps.RateLimit)
+	api.POST("/auth/register", deps.Auth.Register, deps.SecFetchSite, deps.CSRF, deps.RateLimit)
+	api.POST("/auth/login", deps.Auth.Login, deps.SecFetchSite, deps.CSRF, deps.RateLimit)
+	api.POST("/auth/refresh", deps.Auth.Refresh, deps.RequireRefreshToken, deps.SecFetchSite, deps.RateLimit)
+	api.POST("/auth/logout", deps.Auth.Logout, deps.AuthMiddleware, deps.SecFetchSite, deps.CSRF, deps.RateLimit)
 	api.GET("/me", deps.Auth.Me, deps.AuthMiddleware)
 
 	workspaces := api.Group("/workspaces", deps.AuthMiddleware)

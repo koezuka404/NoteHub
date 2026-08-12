@@ -7,7 +7,7 @@ info:
 
     - Access Token: `Authorization: Bearer <token>` ヘッダー（15分有効）
     - Refresh Token: HttpOnly Cookie `notehub_refresh_token`（`/api/auth` パス）
-    - CSRF: Cookie `notehub_csrf_token` と Header `X-CSRF-Token` の Double Submit（`POST /api/auth/refresh`, `POST /api/auth/logout`）
+    - CSRF: `GET /api/auth/csrf` で事前取得したトークンを `Sec-Fetch-Site` 検証と併用。`register` / `login` / `logout` は Double Submit 必須（Echo v4.15 方式）
 
     成功時は `{ "data": ... }`、失敗時は `{ "error": { "code", "message", "requestId?" } }`。
 
@@ -45,6 +45,36 @@ paths:
                   status:
                     type: string
                     example: ok
+
+  /api/auth/csrf:
+    get:
+      tags: [Auth]
+      summary: CSRF トークン取得
+      operationId: issueCsrf
+      description: |
+        ログイン前の register / login 用 CSRF トークンを発行する。
+        成功時、`notehub_csrf_token` Cookie を Set-Cookie する。
+      responses:
+        "200":
+          description: OK
+          headers:
+            Set-Cookie:
+              description: CSRF Cookie
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CSRFResponse"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /api/auth/register:
     post:
@@ -1125,6 +1155,13 @@ components:
         expiresAt:
           type: string
           format: date-time
+
+    CSRFResponse:
+      type: object
+      required: [csrfToken]
+      properties:
+        csrfToken:
+          type: string
 
     LogoutResponse:
       type: object

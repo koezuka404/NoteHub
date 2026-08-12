@@ -30,6 +30,16 @@ func NewAuthController(auth usecase.IAuthUsecase, cookies AuthCookieConfig) *Aut
 	return &AuthController{auth: auth, cookies: cookies}
 }
 
+func (c *AuthController) IssueCSRF(e echo.Context) error {
+	ctx := e.Request().Context()
+	token, err := c.auth.IssueCSRFToken(ctx)
+	if err != nil {
+		return handleAuthUseCaseError(e, err)
+	}
+	c.setCSRFTokenCookie(e, token)
+	return e.JSON(http.StatusOK, dto.Response{Data: dto.CSRFResponse{CsrfToken: token}})
+}
+
 func (c *AuthController) Register(e echo.Context) error {
 	var r dto.RegisterRequest
 	if err := e.Bind(&r); err != nil {

@@ -379,3 +379,14 @@ func TestLogin_UserNotFound_RecordsFailedAuditLog(t *testing.T) {
 		t.Fatalf("expected nil actor/resource for unknown user, got actor=%+v resource=%+v", log.UserID, log.ResourceID)
 	}
 }
+
+func TestIssueCSRFToken_Success(t *testing.T) {
+	uc := newLoginAuthUseCase(&mockUserRepo{}, &mockRefreshTokenRepo{}, &mockAuthService{})
+	token, err := uc.IssueCSRFToken(context.Background())
+	if err != nil {
+		t.Fatalf("IssueCSRFToken: %v", err)
+	}
+	if token != "csrf-token" {
+		t.Fatalf("token = %q", token)
+	}
+}

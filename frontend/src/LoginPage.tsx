@@ -1,5 +1,5 @@
-import { FormEvent, useState } from 'react';
-import { validatePassword } from './api';
+import { FormEvent, useEffect, useState } from 'react';
+import { ensureCsrfToken, validatePassword } from './api';
 import { useAuth } from './auth';
 import { getErrorMessage } from './utils';
 
@@ -13,6 +13,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    void ensureCsrfToken().catch(() => {});
+  }, []);
 
   function switchMode(nextMode: Mode) {
     setMode(nextMode);

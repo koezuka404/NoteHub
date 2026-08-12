@@ -47,6 +47,7 @@ type IAuthUsecase interface {
 	Refresh(ctx context.Context, input RefreshInput) (*RefreshOutput, error)
 	Logout(ctx context.Context, input LogoutInput) (*LogoutOutput, error)
 	GetCurrentUser(ctx context.Context, input GetCurrentUserInput) (*GetCurrentUserOutput, error)
+	IssueCSRFToken(ctx context.Context) (string, error)
 }
 
 type AuthUseCase struct {
@@ -586,4 +587,13 @@ func (uc *AuthUseCase) GetCurrentUser(ctx context.Context, input GetCurrentUserI
 		Email:  user.Email,
 		Status: user.Status,
 	}, nil
+}
+
+func (uc *AuthUseCase) IssueCSRFToken(ctx context.Context) (string, error) {
+	_ = ctx
+	token, err := uc.auth.GenerateCSRFToken()
+	if err != nil {
+		return "", fmt.Errorf("generate csrf token: %w", err)
+	}
+	return token, nil
 }

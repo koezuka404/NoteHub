@@ -38,3 +38,6 @@ type LogoutResponse struct {
 type MeResponse struct {
 	User AuthUserResponse `json:"user"`
 }
+type CSRFResponse struct {
+	CsrfToken string `json:"csrfToken"`
+}

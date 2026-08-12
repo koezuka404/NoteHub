@@ -216,7 +216,7 @@ func run() (exitCode int) {
 
 	authMiddleware := appmiddleware.NewAuthMiddleware(jwtService, userRepository, accessTokenRevocations)
 	requireRefreshMiddleware := appmiddleware.NewRequireRefreshTokenMiddleware(cfg.RefreshTokenCookieName)
-	originValidationMiddleware := appmiddleware.NewOriginValidationMiddleware(cfg)
+	secFetchSiteMiddleware := appmiddleware.NewSecFetchSiteMiddleware()
 	csrfMiddleware := appmiddleware.NewCSRFMiddleware(appmiddleware.CSRFConfig{
 		CookieName: cfg.CSRFTokenCookieName,
 		HeaderName: "X-CSRF-Token",
@@ -241,7 +241,7 @@ func run() (exitCode int) {
 		WebSocket:           webSocketController,
 		AuthMiddleware:      authMiddleware,
 		RequireRefreshToken: requireRefreshMiddleware,
-		OriginValidation:    originValidationMiddleware,
+		SecFetchSite:        secFetchSiteMiddleware,
 		CSRF:                csrfMiddleware,
 		RateLimit:           rateLimitMiddleware,
 	})

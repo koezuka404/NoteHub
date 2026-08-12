@@ -27,6 +27,21 @@ func defaultAuthCookies() AuthCookieConfig {
 	}
 }
 
+func TestAuthController_IssueCSRF(t *testing.T) {
+	ctrl := NewAuthController(&mockAuthUsecase{issueCSRFOut: "csrf-token"}, defaultAuthCookies())
+	ctx, rec := newEchoContext(t, http.MethodGet, "/auth/csrf", nil)
+	if err := ctrl.IssueCSRF(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	var payload dto.Response
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestAuthController_Register(t *testing.T) {
 	userID := uuid.New()
 	ctrl := NewAuthController(&mockAuthUsecase{

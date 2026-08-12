@@ -8,10 +8,15 @@ function clearCsrfCookie() {
   document.cookie = 'notehub_csrf_token=; Max-Age=0; path=/';
 }
 
+function seedCsrfToken(token = 'csrf-test') {
+  document.cookie = `notehub_csrf_token=${encodeURIComponent(token)}; path=/`;
+}
+
 function resetApiState() {
   api.configureAuthHandlers(null);
   api.stopProactiveRefresh();
   clearCsrfCookie();
+  seedCsrfToken();
   if (typeof sessionStorage !== 'undefined') {
     sessionStorage.removeItem('notehub_session_hint');
   }
@@ -208,6 +213,13 @@ describe('api helpers', () => {
 describe('auth endpoints', () => {
   beforeEach(resetApiState);
   afterEach(resetApiState);
+
+  it('ensureCsrfToken bootstraps token when missing', async () => {
+    clearCsrfCookie();
+    mockFetch({ ok: true, data: { csrfToken: 'bootstrap-token' } });
+    await api.ensureCsrfToken();
+    expect(api.getCsrfToken()).toBe('bootstrap-token');
+  });
 
   it('register login refresh logout me', async () => {
     mockFetch([

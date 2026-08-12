@@ -65,6 +65,43 @@ func TestCSRFMiddleware_CustomHeaderName(t *testing.T) {
 	}
 }
 
+func TestCSRFMiddleware_RejectsCrossSite(t *testing.T) {
+	rec := runCSRFWithSecFetchSite(t, CSRFConfig{CookieName: "csrf"}, "cross-site", "csrf=secret; Path=/", "secret")
+	payload := decodeErrorResponse(t, rec)
+	if payload.Error.Code != "SEC_FETCH_SITE_BLOCKED" {
+		t.Fatalf("code = %q", payload.Error.Code)
+	}
+}
+
+func runCSRFWithSecFetchSite(t *testing.T, config CSRFConfig, secFetchSite, cookieHeader, csrfHeader string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	e := echo.New()
+	e.Use(NewCSRFMiddleware(config))
+	e.POST("/", func(ctx echo.Context) error {
+		return ctx.NoContent(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	if secFetchSite != "" {
+		req.Header.Set(echo.HeaderSecFetchSite, secFetchSite)
+	}
+	if cookieHeader != "" {
+		req.Header.Set("Cookie", cookieHeader)
+	}
+	headerName := config.HeaderName
+	if headerName == "" {
+		headerName = defaultCSRFHeaderName
+	}
+	if csrfHeader != "" {
+		req.Header.Set(headerName, csrfHeader)
+	}
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	return rec
+}
+
 func runCSRF(t *testing.T, config CSRFConfig, cookieHeader, csrfHeader string) *httptest.ResponseRecorder {
 	rec, _ := runCSRFWithContext(t, config, cookieHeader, csrfHeader)
 	return rec

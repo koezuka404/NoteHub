@@ -272,6 +272,38 @@ export function getCsrfToken(): string {
   return match ? decodeURIComponent(match[1]) : '';
 }
 
+let csrfBootstrapPromise: Promise<void> | null = null;
+
+export async function ensureCsrfToken(): Promise<void> {
+  if (getCsrfToken()) {
+    return;
+  }
+  if (!csrfBootstrapPromise) {
+    csrfBootstrapPromise = (async () => {
+      const result = await request<{ csrfToken: string }>(
+        '/api/auth/csrf',
+        {},
+        { skipAuthRetry: true },
+      );
+      applyCsrfToken(result.csrfToken);
+    })().finally(() => {
+      csrfBootstrapPromise = null;
+    });
+  }
+  await csrfBootstrapPromise;
+}
+
+async function postWithCsrf<T>(path: string, body: unknown): Promise<T> {
+  await ensureCsrfToken();
+  const headers = new Headers({ 'Content-Type': 'application/json' });
+  applyCsrfHeader(headers);
+  return api<T>(path, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+}
+
 export type RegisterResult = {
   user: AuthUser;
   createdAt: string;
@@ -293,17 +325,11 @@ export type RefreshResult = {
 };
 
 export function register(name: string, email: string, password: string) {
-  return api<RegisterResult>('/api/auth/register', {
-    method: 'POST',
-    body: JSON.stringify({ name, email, password }),
-  });
+  return postWithCsrf<RegisterResult>('/api/auth/register', { name, email, password });
 }
 
 export async function login(email: string, password: string) {
-  const result = await api<LoginResult>('/api/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ email, password }),
-  });
+  const result = await postWithCsrf<LoginResult>('/api/auth/login', { email, password });
   applyTokenRefreshResult(result);
   return result;
 }
