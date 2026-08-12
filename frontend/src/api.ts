@@ -160,6 +160,13 @@ function isRefreshableAuthError(status: number, code: string | undefined): boole
   return status === 401 && code === 'ACCESS_TOKEN_EXPIRED';
 }
 
+function applyCsrfHeader(headers: Headers) {
+  const csrfToken = getCsrfToken();
+  if (csrfToken) {
+    headers.set('X-CSRF-Token', csrfToken);
+  }
+}
+
 function performTokenRefresh(): Promise<TokenRefreshResult> {
   if (refreshPromise) {
     return refreshPromise;
@@ -312,13 +319,10 @@ export async function refresh(): Promise<RefreshResult> {
 }
 
 export async function logout(accessToken: string) {
-  const headers: Record<string, string> = {
+  const headers = new Headers({
     Authorization: `Bearer ${accessToken}`,
-  };
-  const csrfToken = getCsrfToken();
-  if (csrfToken) {
-    headers['X-CSRF-Token'] = csrfToken;
-  }
+  });
+  applyCsrfHeader(headers);
   try {
     return await api<{ message: string }>('/api/auth/logout', {
       method: 'POST',

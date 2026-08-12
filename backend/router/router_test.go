@@ -25,7 +25,6 @@ func testDeps(ws *controller.WebSocketController) Deps {
 		AuthMiddleware:      passthroughMiddleware,
 		RequireRefreshToken: passthroughMiddleware,
 		OriginValidation:    passthroughMiddleware,
-		OriginOrCSRF:        passthroughMiddleware,
 		CSRF:                passthroughMiddleware,
 		RateLimit:           passthroughMiddleware,
 	}

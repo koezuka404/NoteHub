@@ -8,17 +8,16 @@ import (
 )
 
 type Deps struct {
-	Auth           *controller.AuthController
-	Workspace      *controller.WorkspaceController
-	Member         *controller.MemberController
-	Account        *controller.AccountController
-	Document       *controller.DocumentController
-	Version        *controller.VersionController
-	WebSocket      *controller.WebSocketController
+	Auth                *controller.AuthController
+	Workspace           *controller.WorkspaceController
+	Member              *controller.MemberController
+	Account             *controller.AccountController
+	Document            *controller.DocumentController
+	Version             *controller.VersionController
+	WebSocket           *controller.WebSocketController
 	AuthMiddleware      echo.MiddlewareFunc
 	RequireRefreshToken echo.MiddlewareFunc
 	OriginValidation    echo.MiddlewareFunc
-	OriginOrCSRF        echo.MiddlewareFunc
 	CSRF                echo.MiddlewareFunc
 	RateLimit           echo.MiddlewareFunc
 }
@@ -27,11 +26,45 @@ func Register(e *echo.Echo, deps Deps) {
 	e.GET("/health", func(ctx echo.Context) error {
 		return ctx.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
+
 	if deps.WebSocket != nil {
-		registerWebSocketRoutes(e, deps.WebSocket)
+		e.GET("/ws/documents/:documentId", deps.WebSocket.HandleDocument)
+		e.GET("/ws/workspaces/:workspaceId", deps.WebSocket.HandleWorkspace)
 	}
+
 	api := e.Group("/api")
-	registerAuthRoutes(api, deps.Auth, deps.AuthMiddleware, deps.RequireRefreshToken, deps.OriginValidation, deps.OriginOrCSRF, deps.RateLimit)
-	registerWorkspaceRoutes(api, deps.Workspace, deps.Member, deps.Account, deps.Document, deps.AuthMiddleware, deps.RateLimit)
-	registerDocumentRoutes(api, deps.Document, deps.Version, deps.AuthMiddleware, deps.RateLimit)
+
+	api.POST("/auth/register", deps.Auth.Register, deps.RateLimit)
+	api.POST("/auth/login", deps.Auth.Login, deps.RateLimit)
+	api.POST("/auth/refresh", deps.Auth.Refresh, deps.RequireRefreshToken, deps.OriginValidation, deps.RateLimit)
+	api.POST("/auth/logout", deps.Auth.Logout, deps.AuthMiddleware, deps.CSRF, deps.RateLimit)
+	api.GET("/me", deps.Auth.Me, deps.AuthMiddleware)
+
+	workspaces := api.Group("/workspaces", deps.AuthMiddleware)
+	workspaces.GET("", deps.Workspace.List)
+	workspaces.POST("", deps.Workspace.Create, deps.RateLimit)
+	workspaces.GET("/:workspaceId", deps.Workspace.Get)
+	workspaces.PATCH("/:workspaceId", deps.Workspace.Update, deps.RateLimit)
+	workspaces.DELETE("/:workspaceId", deps.Workspace.Delete, deps.RateLimit)
+
+	workspaces.GET("/:workspaceId/members", deps.Member.List)
+	workspaces.GET("/:workspaceId/users/search", deps.Member.Search, deps.RateLimit)
+	workspaces.POST("/:workspaceId/members", deps.Member.Add, deps.RateLimit)
+	workspaces.DELETE("/:workspaceId/members/:userId", deps.Member.Remove, deps.RateLimit)
+	workspaces.POST("/:workspaceId/members/:userId/suspend", deps.Account.Suspend, deps.RateLimit)
+	workspaces.POST("/:workspaceId/members/:userId/reactivate", deps.Account.Reactivate, deps.RateLimit)
+	workspaces.POST("/:workspaceId/members/:userId/delete-account", deps.Account.Delete, deps.RateLimit)
+
+	workspaces.GET("/:workspaceId/documents", deps.Document.List)
+	workspaces.POST("/:workspaceId/documents", deps.Document.Create, deps.RateLimit)
+
+	documents := api.Group("/documents", deps.AuthMiddleware)
+	documents.GET("/:documentId", deps.Document.Get)
+	documents.PATCH("/:documentId", deps.Document.Update, deps.RateLimit)
+	documents.DELETE("/:documentId", deps.Document.Delete, deps.RateLimit)
+
+	documents.GET("/:documentId/versions", deps.Version.List)
+	documents.POST("/:documentId/versions", deps.Version.Save, deps.RateLimit)
+	documents.GET("/:documentId/versions/:versionId", deps.Version.Get)
+	documents.POST("/:documentId/versions/:versionId/restore", deps.Version.Restore, deps.RateLimit)
 }

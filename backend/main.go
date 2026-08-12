@@ -215,13 +215,9 @@ func run() (exitCode int) {
 	}
 
 	authMiddleware := appmiddleware.NewAuthMiddleware(jwtService, userRepository, accessTokenRevocations)
-	csrfMiddleware := appmiddleware.NewCSRFMiddleware(appmiddleware.CSRFConfig{
-		CookieName: cfg.CSRFTokenCookieName,
-		HeaderName: "X-CSRF-Token",
-	})
 	requireRefreshMiddleware := appmiddleware.NewRequireRefreshTokenMiddleware(cfg.RefreshTokenCookieName)
 	originValidationMiddleware := appmiddleware.NewOriginValidationMiddleware(cfg)
-	originOrCSRFMiddleware := appmiddleware.NewOriginOrCSRFMiddleware(cfg, appmiddleware.CSRFConfig{
+	csrfMiddleware := appmiddleware.NewCSRFMiddleware(appmiddleware.CSRFConfig{
 		CookieName: cfg.CSRFTokenCookieName,
 		HeaderName: "X-CSRF-Token",
 	})
@@ -236,17 +232,16 @@ func run() (exitCode int) {
 	e.Use(appmiddleware.NewLoggingMiddleware())
 	e.Use(appmiddleware.NewCORSMiddleware(cfg))
 	router.Register(e, router.Deps{
-		Auth:           authController,
-		Workspace:      workspaceController,
-		Member:         memberController,
-		Account:        accountController,
-		Document:       documentController,
-		Version:        versionController,
-		WebSocket:      webSocketController,
+		Auth:                authController,
+		Workspace:           workspaceController,
+		Member:              memberController,
+		Account:             accountController,
+		Document:            documentController,
+		Version:             versionController,
+		WebSocket:           webSocketController,
 		AuthMiddleware:      authMiddleware,
 		RequireRefreshToken: requireRefreshMiddleware,
 		OriginValidation:    originValidationMiddleware,
-		OriginOrCSRF:        originOrCSRFMiddleware,
 		CSRF:                csrfMiddleware,
 		RateLimit:           rateLimitMiddleware,
 	})
