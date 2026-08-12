@@ -24,11 +24,6 @@ func NewCSRFMiddleware(config CSRFConfig) echo.MiddlewareFunc {
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(ctx echo.Context) error {
-			secFetchSite := strings.TrimSpace(ctx.Request().Header.Get(echo.HeaderSecFetchSite))
-			if secFetchSite == "cross-site" {
-				return writeCSRFError(ctx, "SEC_FETCH_SITE_BLOCKED", "リクエスト元が許可されていません")
-			}
-
 			cookie, err := ctx.Cookie(cookieName)
 			if err != nil || cookie.Value == "" {
 				return writeCSRFError(ctx, "CSRF_TOKEN_REQUIRED", "CSRFトークンが必要です")

@@ -19,6 +19,8 @@ func NewSecFetchSiteMiddleware() echo.MiddlewareFunc {
 			case "same-origin", "none":
 				ctx.Set("sec_fetch_site_validated", true)
 				return next(ctx)
+			case "same-site", "cross-site":
+				return next(ctx)
 			default:
 				return writeSecFetchSiteError(ctx)
 			}

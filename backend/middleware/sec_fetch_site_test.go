@@ -25,38 +25,16 @@ func TestSecFetchSiteMiddleware_AllowsNone(t *testing.T) {
 	}
 }
 
-func TestSecFetchSiteMiddleware_RejectsCrossSiteEvenWithAllowedOrigin(t *testing.T) {
-	rec := runSecFetchSite(t, "cross-site", "https://app.example.com", "")
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("status = %d", rec.Code)
-	}
-	payload := decodeErrorResponse(t, rec)
-	if payload.Error.Code != "SEC_FETCH_SITE_BLOCKED" {
-		t.Fatalf("code = %q", payload.Error.Code)
-	}
-}
-
-func TestSecFetchSiteMiddleware_RejectsSameSiteEvenWithAllowedReferer(t *testing.T) {
-	rec := runSecFetchSite(t, "same-site", "", "https://app.example.com/dashboard")
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("status = %d", rec.Code)
-	}
-}
-
-func TestSecFetchSiteMiddleware_RejectsCrossSite(t *testing.T) {
+func TestSecFetchSiteMiddleware_PassesCrossSiteForCSRFFallback(t *testing.T) {
 	rec := runSecFetchSite(t, "cross-site", "https://evil.example.com", "")
-	if rec.Code != http.StatusForbidden {
+	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d", rec.Code)
-	}
-	payload := decodeErrorResponse(t, rec)
-	if payload.Error.Code != "SEC_FETCH_SITE_BLOCKED" {
-		t.Fatalf("code = %q", payload.Error.Code)
 	}
 }
 
-func TestSecFetchSiteMiddleware_RejectsSameSite(t *testing.T) {
+func TestSecFetchSiteMiddleware_PassesSameSiteForCSRFFallback(t *testing.T) {
 	rec := runSecFetchSite(t, "same-site", "", "")
-	if rec.Code != http.StatusForbidden {
+	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d", rec.Code)
 	}
 }
@@ -72,6 +50,30 @@ func TestSecFetchSiteMiddleware_RejectsUnknownValue(t *testing.T) {
 	rec := runSecFetchSite(t, "unknown", "", "")
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d", rec.Code)
+	}
+}
+
+func TestSecFetchSiteWithCSRFFallback_RejectsCrossSiteWithoutToken(t *testing.T) {
+	e := echo.New()
+	e.Use(NewSecFetchSiteMiddleware())
+	e.Use(NewCSRFMiddleware(CSRFConfig{CookieName: "csrf"}))
+	e.POST("/", func(ctx echo.Context) error {
+		return ctx.NoContent(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	req.Header.Set(echo.HeaderSecFetchSite, "cross-site")
+	req.Header.Set(echo.HeaderOrigin, "https://app.example.com")
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	payload := decodeErrorResponse(t, rec)
+	if payload.Error.Code != "CSRF_TOKEN_REQUIRED" {
+		t.Fatalf("code = %q", payload.Error.Code)
 	}
 }
 

@@ -234,7 +234,7 @@ Vercel の Environment:
 
 **注意:** `notehub-api.onrender.com` など Blueprint 名と異なる URL になることがあります。Dashboard の URL を使ってください。
 
-**CSRF / セッション:** Echo v4.15 の Fetch Metadata 方式を採用しています。`GET /api/auth/csrf` で CSRF トークンを事前取得し、`register` / `login` / `logout` では **Sec-Fetch-Site 検証 + Double Submit Cookie** を併用します。`refresh` は **Sec-Fetch-Site 検証 + Refresh Cookie** です。CSRF トークンは localStorage に保存せず、メモリ上のみ保持します。
+**CSRF / セッション:** Echo v4.15 方式。`Sec-Fetch-Site` が `same-origin` / `none` なら Fetch Metadata で許可、`cross-site` / `same-site` では **Double Submit Cookie にフォールバック**します（Vercel + Render のクロスオリジン構成向け）。`register` / `login` / `logout` は CSRF 必須、`refresh` は Refresh Cookie で保護します。
 
 動作確認: `https://<your-api>/health` → `{"status":"ok"}`
 
