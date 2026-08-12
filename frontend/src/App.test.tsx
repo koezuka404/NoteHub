@@ -9,7 +9,16 @@ vi.mock('./auth', () => ({
   AuthProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
-vi.mock('./api');
+vi.mock('./api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./api')>();
+  return {
+    ...actual,
+    listWorkspaces: vi.fn(),
+    getWorkspace: vi.fn(),
+    listDocuments: vi.fn(),
+    ensureCsrfToken: vi.fn().mockResolvedValue(undefined),
+  };
+});
 
 describe('App', () => {
   afterEach(() => {

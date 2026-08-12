@@ -265,6 +265,8 @@ describe('auth endpoints', () => {
   });
 
   it('logout omits CSRF header when token is unavailable', async () => {
+    clearCsrfCookie();
+    api.configureAuthHandlers(null);
     const fetchMock = mockFetch({ ok: true, data: { message: 'ok' } });
     await expect(api.logout('t1')).resolves.toEqual({ message: 'ok' });
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];

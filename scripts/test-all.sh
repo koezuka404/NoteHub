@@ -129,6 +129,8 @@ COOKIE_JAR="$(mktemp)"
 RESPONSE_FILE="$(mktemp)"
 trap 'rm -f "$COOKIE_JAR" "$RESPONSE_FILE"; cleanup' EXIT
 
+CSRF_TOKEN=""
+
 UNIQUE="$(date +%s)-$RANDOM"
 EMAIL="test-${UNIQUE}@example.com"
 PASSWORD="Testpass1"
@@ -143,6 +145,9 @@ api() {
   local args=(-sS -o "$RESPONSE_FILE" -w "%{http_code}" -b "$COOKIE_JAR" -c "$COOKIE_JAR")
   if [[ -n "$auth" ]]; then
     args+=(-H "Authorization: Bearer $auth")
+  fi
+  if [[ -n "$CSRF_TOKEN" ]]; then
+    args+=(-H "X-CSRF-Token: $CSRF_TOKEN")
   fi
   if [[ -n "$body" ]]; then
     args+=(-H "Content-Type: application/json" -X "$method" -d "$body")
@@ -177,6 +182,11 @@ for part in field.split("."):
 print(value)
 PY
 }
+
+info "Auth: fetch CSRF token"
+status="$(api GET /api/auth/csrf)"
+assert_status 200 "csrf bootstrap" "$status"
+CSRF_TOKEN="$(json_field csrfToken "$RESPONSE_FILE")"
 
 info "Auth: register + login"
 status="$(api POST /api/auth/register "{\"name\":\"$NAME\",\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}")"
