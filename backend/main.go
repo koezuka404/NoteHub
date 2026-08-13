@@ -4,8 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/labstack/echo/v4"
-
 	"github.com/koezuka404/notehub/authservice"
 	"github.com/koezuka404/notehub/batch"
 	"github.com/koezuka404/notehub/controller"
@@ -225,13 +223,7 @@ func run() (exitCode int) {
 		Capacity: cfg.RateLimitCapacity, RefillPerSecond: cfg.RateLimitRefillRate,
 	})
 
-	e := echo.New()
-	e.IPExtractor = echo.ExtractIPFromXFFHeader()
-	e.Use(appmiddleware.NewRecoveryMiddleware())
-	e.Use(appmiddleware.NewRequestIDMiddleware())
-	e.Use(appmiddleware.NewLoggingMiddleware())
-	e.Use(appmiddleware.NewCORSMiddleware(cfg))
-	router.Register(e, router.Deps{
+	e := router.New(cfg, router.Deps{
 		Auth:                authController,
 		Workspace:           workspaceController,
 		Member:              memberController,

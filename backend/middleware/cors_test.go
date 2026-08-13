@@ -52,3 +52,45 @@ func TestCORSMiddleware_CustomOrigins(t *testing.T) {
 		t.Fatal("expected exposed headers")
 	}
 }
+
+func TestCORSMiddleware_AllowsOriginSuffix(t *testing.T) {
+	e := echo.New()
+	e.Use(NewCORSMiddleware(&config.Config{
+		Environment:           config.EnvironmentProduction,
+		AllowedOrigins:        []string{"https://note-hub-three.vercel.app"},
+		AllowedOriginSuffixes: []string{".vercel.app"},
+	}))
+	e.GET("/", func(ctx echo.Context) error {
+		return ctx.NoContent(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Origin", "https://note-hub-git-main-koezuka404s-projects.vercel.app")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://note-hub-git-main-koezuka404s-projects.vercel.app" {
+		t.Fatalf("allow-origin = %q", got)
+	}
+}
+
+func TestCORSMiddleware_RejectsUnknownOrigin(t *testing.T) {
+	e := echo.New()
+	e.Use(NewCORSMiddleware(&config.Config{
+		Environment:           config.EnvironmentProduction,
+		AllowedOrigins:        []string{"https://note-hub-three.vercel.app"},
+		AllowedOriginSuffixes: []string{".vercel.app"},
+	}))
+	e.GET("/", func(ctx echo.Context) error {
+		return ctx.NoContent(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Origin", "https://evil.example.com")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("allow-origin = %q, want empty", got)
+	}
+}

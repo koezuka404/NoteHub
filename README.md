@@ -126,7 +126,8 @@ npm run test:coverage
 | `COOKIE_DOMAIN` | — | 空 | Cookie ドメイン |
 | `REFRESH_TOKEN_COOKIE_NAME` | — | `notehub_refresh_token` | Refresh Cookie 名 |
 | `CSRF_TOKEN_COOKIE_NAME` | — | `notehub_csrf_token` | CSRF Cookie 名 |
-| `CORS_ALLOWED_ORIGINS` | 本番 ✅ | — | 許可 Origin（カンマ区切り） |
+| `CORS_ALLOWED_ORIGINS` | 本番 ✅ | — | 許可 Origin（カンマ区切り、本番 URL など） |
+| `CORS_ALLOWED_ORIGIN_SUFFIXES` | — | — | 許可 Origin サフィックス（例: `.vercel.app` で Preview デプロイも許可） |
 | `PUBLIC_HTTP_URL` | 推奨 | — | 公開 API URL（末尾スラッシュなし） |
 | `REDIS_OPERATION_TIMEOUT` | — | `2s` | Redis 操作タイムアウト |
 | `LOGIN_MAX_FAILURES` | — | `5` | ログイン失敗上限 |
@@ -218,7 +219,8 @@ Vercel の本番 URL が確定したら、Render の Environment を設定して
 
 | 変数 | 例 | 用途 |
 |------|-----|------|
-| `CORS_ALLOWED_ORIGINS` | `https://note-hub-three.vercel.app` | フロントからの API 通信 |
+| `CORS_ALLOWED_ORIGINS` | `https://note-hub-three.vercel.app` | 本番フロント URL |
+| `CORS_ALLOWED_ORIGIN_SUFFIXES` | `.vercel.app` | Vercel Preview デプロイ用（`note-hub-git-main-....vercel.app` 等） |
 | `PUBLIC_HTTP_URL` | `https://notehub-4uet.onrender.com` | **Render Dashboard に表示される実際の URL** |
 | `APP_ENV` | `production` | 本番設定 |
 | `COOKIE_SECURE` | `true` | HTTPS Cookie |

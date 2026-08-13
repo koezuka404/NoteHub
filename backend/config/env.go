@@ -40,6 +40,7 @@ type Config struct {
 	RefreshTokenCookieName string
 	CSRFTokenCookieName    string
 	AllowedOrigins         []string
+	AllowedOriginSuffixes  []string
 
 	LoginMaxFailures    int
 	LoginFailureWindow  time.Duration
@@ -95,6 +96,7 @@ func LoadFromEnv(getenv func(string) string) (*Config, error) {
 		RefreshTokenCookieName:      valueOrDefault(getenv("REFRESH_TOKEN_COOKIE_NAME"), "notehub_refresh_token"),
 		CSRFTokenCookieName:         valueOrDefault(getenv("CSRF_TOKEN_COOKIE_NAME"), "notehub_csrf_token"),
 		AllowedOrigins:              splitCSV(getenv("CORS_ALLOWED_ORIGINS")),
+		AllowedOriginSuffixes:       splitCSV(getenv("CORS_ALLOWED_ORIGIN_SUFFIXES")),
 		LoginMaxFailures:            intValue(getenv("LOGIN_MAX_FAILURES"), 5),
 		LoginFailureWindow:          durationValue(getenv("LOGIN_FAILURE_WINDOW"), time.Hour),
 		LoginLockDuration:           durationValue(getenv("LOGIN_LOCK_DURATION"), time.Hour),
@@ -215,6 +217,11 @@ func (c Config) Validate() error {
 			parsed, err := url.Parse(origin)
 			if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
 				errs = append(errs, fmt.Errorf("production origin must be HTTPS: %s", origin))
+			}
+		}
+		for _, suffix := range c.AllowedOriginSuffixes {
+			if !strings.HasPrefix(suffix, ".") || strings.Contains(suffix, " ") {
+				errs = append(errs, fmt.Errorf("CORS_ALLOWED_ORIGIN_SUFFIXES entries must start with '.': %s", suffix))
 			}
 		}
 	}

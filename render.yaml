@@ -39,5 +39,7 @@ services:
         value: None
       - key: CORS_ALLOWED_ORIGINS
         sync: false
+      - key: CORS_ALLOWED_ORIGIN_SUFFIXES
+        sync: false
       - key: PUBLIC_HTTP_URL
         sync: false

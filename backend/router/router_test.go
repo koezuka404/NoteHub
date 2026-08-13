@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/koezuka404/notehub/config"
 	"github.com/koezuka404/notehub/controller"
 	"github.com/labstack/echo/v4"
 )
@@ -27,6 +28,19 @@ func testDeps(ws *controller.WebSocketController) Deps {
 		SecFetchSite:        passthroughMiddleware,
 		CSRF:                passthroughMiddleware,
 		RateLimit:           passthroughMiddleware,
+	}
+}
+
+func TestNew(t *testing.T) {
+	cfg := &config.Config{Environment: config.EnvironmentDevelopment}
+	e := New(cfg, testDeps(&controller.WebSocketController{}))
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /health status = %d, want %d", rec.Code, http.StatusOK)
 	}
 }
 
