@@ -3,7 +3,9 @@ package router
 import (
 	"net/http"
 
+	"github.com/koezuka404/notehub/config"
 	"github.com/koezuka404/notehub/controller"
+	appmiddleware "github.com/koezuka404/notehub/middleware"
 	"github.com/labstack/echo/v4"
 )
 
@@ -20,6 +22,17 @@ type Deps struct {
 	SecFetchSite        echo.MiddlewareFunc
 	CSRF                echo.MiddlewareFunc
 	RateLimit           echo.MiddlewareFunc
+}
+
+func New(cfg *config.Config, deps Deps) *echo.Echo {
+	e := echo.New()
+	e.IPExtractor = echo.ExtractIPFromXFFHeader()
+	e.Use(appmiddleware.NewRecoveryMiddleware())
+	e.Use(appmiddleware.NewRequestIDMiddleware())
+	e.Use(appmiddleware.NewLoggingMiddleware())
+	e.Use(appmiddleware.NewCORSMiddleware(cfg))
+	Register(e, deps)
+	return e
 }
 
 func Register(e *echo.Echo, deps Deps) {
