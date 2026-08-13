@@ -238,6 +238,80 @@ Vercel の Environment:
 
 **CSRF / セッション:** Echo v4.15 方式。`Sec-Fetch-Site` が `same-origin` / `none` なら Fetch Metadata で許可、`cross-site` / `same-site` では **Double Submit Cookie にフォールバック**します（Vercel + Render のクロスオリジン構成向け）。`register` / `login` / `logout` は CSRF 必須、`refresh` は Refresh Cookie で保護します。
 
+### Sec-Fetch-Site 導入の軌跡
+
+認証 API の CSRF 対策は、本番デプロイ（Vercel + Render）を通じて段階的に整理されました。
+
+#### 1. Origin ミドルウェア（初期）
+
+`refresh` / `logout` 向けに `Origin` ヘッダと `CORS_ALLOWED_ORIGINS` を照合する `origin.go` を導入しました。同一オリジン前提の CSRF 補助として機能していました。
+
+#### 2. Origin + CSRF 統合（`origin_or_csrf.go`）
+
+`register` / `login` 追加に伴い、Origin 検証と Double Submit CSRF を 1 つのミドルウェアにまとめた `origin_or_csrf.go` を追加しました。ルートごとに適用ミドルウェアが分かれ、責務が曖昧になったため、次の段階で分割しました。
+
+#### 3. Echo v4.15 方式への移行（`Sec-Fetch-Site` + CSRF 分離）
+
+[Echo v4.15](https://github.com/labstack/echo/releases/tag/v4.15.0) の Fetch Metadata 方式を採用し、ミドルウェアを分離しました。
+
+| ファイル | 役割 |
+|---|---|
+| `middleware/sec_fetch_site.go` | `Sec-Fetch-Site` ヘッダによる Fetch Metadata 検証 |
+| `middleware/csrf.go` | Double Submit Cookie（`notehub_csrf_token` + `X-CSRF-Token`） |
+| `middleware/cors.go` | ブラウザのクロスオリジン通信許可（別レイヤー） |
+
+削除した旧ファイル: `origin.go`, `origin_or_csrf.go` および各テスト。
+
+`GET /api/auth/csrf` を追加し、フロントは `LoginPage` 表示時に CSRF トークンを先読みします（`frontend/src/api.ts` の `ensureCsrfToken()`）。
+
+#### 4. 本番 403（`SEC_FETCH_SITE_BLOCKED`）と修正
+
+初版の `SecFetchSite` は `cross-site` / `same-site` を **403 で拒否**していました。Vercel（フロント）→ Render（API）はブラウザから常に `Sec-Fetch-Site: cross-site` になるため、本番で `GET /api/auth/csrf` や `POST /auth/login` が失敗しました。
+
+```
+ブラウザ (Vercel)  →  Sec-Fetch-Site: cross-site  →  旧 SecFetchSite: 403
+                                                    →  CORS は別問題（環境変数で解決）
+```
+
+#### 5. 現行設計（Echo フォールバック）
+
+Echo 公式と同様、**Fetch Metadata で確証できる場合のみ早期許可**し、それ以外は CSRF に委ねます。
+
+| `Sec-Fetch-Site` | SecFetchSite ミドルウェア | 次のチェック |
+|---|---|---|
+| `same-origin` / `none` | 許可（`sec_fetch_site_validated` をセット） | CSRF ルートなら Double Submit |
+| `cross-site` / `same-site` | **通過（403 しない）** | CSRF ルートなら **Double Submit 必須** |
+| ヘッダなし | 通過 | curl 等は CSRF で保護 |
+| 未知の値 | 403 `SEC_FETCH_SITE_BLOCKED` | — |
+
+#### 配線（現行）
+
+ミドルウェアの **生成** は `main.go`、**ルートへの適用** は `router/router.go` です。
+
+```go
+// main.go — ミドルウェア生成
+secFetchSiteMiddleware := appmiddleware.NewSecFetchSiteMiddleware()
+csrfMiddleware := appmiddleware.NewCSRFMiddleware(...)
+
+// router/router.go — 認証ルート
+api.GET("/auth/csrf",     deps.Auth.IssueCSRF, deps.SecFetchSite, deps.RateLimit)
+api.POST("/auth/register", deps.Auth.Register, deps.SecFetchSite, deps.CSRF, deps.RateLimit)
+api.POST("/auth/login",    deps.Auth.Login,    deps.SecFetchSite, deps.CSRF, deps.RateLimit)
+api.POST("/auth/refresh",  deps.Auth.Refresh,  deps.RequireRefreshToken, deps.SecFetchSite, deps.RateLimit)
+api.POST("/auth/logout",   deps.Auth.Logout,   deps.AuthMiddleware, deps.SecFetchSite, deps.CSRF, deps.RateLimit)
+```
+
+#### レイヤー整理
+
+| レイヤー | 役割 | 設定 |
+|---|---|---|
+| **CORS** | ブラウザがクロスオリジン通信してよいか | `CORS_ALLOWED_ORIGINS`, `CORS_ALLOWED_ORIGIN_SUFFIXES` |
+| **Sec-Fetch-Site** | Fetch Metadata による早期許可 | コード（環境変数不要） |
+| **CSRF** | 状態変更リクエストの正当性 | Cookie + `X-CSRF-Token` |
+| **Refresh Cookie** | セッション更新 | HttpOnly Cookie（`/api/auth/refresh`） |
+
+本番で 403 が出る場合は Response body の `error.code` を確認してください（`SEC_FETCH_SITE_BLOCKED` / `CSRF_TOKEN_REQUIRED` / `CSRF_TOKEN_INVALID`）。
+
 動作確認: `https://<your-api>/health` → `{"status":"ok"}`
 
 ## CI
