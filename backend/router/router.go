@@ -26,6 +26,7 @@ type Deps struct {
 
 func New(cfg *config.Config, deps Deps) *echo.Echo {
 	e := echo.New()
+
 	e.IPExtractor = appmiddleware.NewClientIPExtractor(
 		cfg.TrustedProxyCIDRs,
 		"X-Vercel-Forwarded-For",
@@ -34,6 +35,13 @@ func New(cfg *config.Config, deps Deps) *echo.Echo {
 	e.Use(appmiddleware.NewRecoveryMiddleware())
 	e.Use(appmiddleware.NewRequestIDMiddleware())
 	e.Use(appmiddleware.NewLoggingMiddleware())
+
+	e.Use(
+		appmiddleware.NewBodyLimitMiddleware(
+			cfg.MaxRequestBodyBytes,
+		),
+	)
+
 	e.Use(appmiddleware.NewCORSMiddleware(cfg))
 
 	Register(e, deps)

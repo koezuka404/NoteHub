@@ -50,6 +50,9 @@ type Config struct {
 	RateLimitRefillRate float64
 	TrustedProxyCIDRs   []string
 
+	// Request body size limit.
+	MaxRequestBodyBytes int64
+
 	WSMaxConnectionsPerDocument  int
 	DocumentAutosaveInterval     time.Duration
 	DocumentAutosaveIdleDuration time.Duration
@@ -71,6 +74,7 @@ func MustLoad() *Config {
 	if err != nil {
 		panic(fmt.Sprintf("invalid configuration: %v", err))
 	}
+
 	return cfg
 }
 
@@ -83,30 +87,43 @@ func LoadFromEnv(getenv func(string) string) (*Config, error) {
 	}
 
 	cfg := &Config{
-		Environment:                  environment,
-		HTTPPort:                     resolveHTTPPort(getenv),
-		DatabaseURL:                  strings.TrimSpace(getenv("DATABASE_URL")),
-		RedisURL:                     strings.TrimSpace(getenv("REDIS_URL")),
-		RedisOperationTimeout:        durationValue(getenv("REDIS_OPERATION_TIMEOUT"), 2*time.Second),
-		JWTSecret:                    getenv("JWT_SECRET"),
-		JWTIssuer:                    valueOrDefault(getenv("JWT_ISSUER"), "notehub-api"),
-		JWTAudience:                  valueOrDefault(getenv("JWT_AUDIENCE"), "notehub-client"),
-		AccessTokenTTL:               resolveAccessTokenTTL(getenv),
-		RefreshTokenTTL:              resolveRefreshTokenTTL(environment, getenv),
-		BcryptCost:                   intValue(getenv("BCRYPT_COST"), 12),
-		CookieSecure:                 boolValue(getenv("COOKIE_SECURE"), environment == EnvironmentProduction),
-		CookieDomain:                 strings.TrimSpace(getenv("COOKIE_DOMAIN")),
-		CookieSameSite:               normalizeCookieSameSite(valueOrDefault(getenv("COOKIE_SAME_SITE"), "Lax")),
-		RefreshTokenCookieName:       valueOrDefault(getenv("REFRESH_TOKEN_COOKIE_NAME"), "notehub_refresh_token"),
-		CSRFTokenCookieName:          valueOrDefault(getenv("CSRF_TOKEN_COOKIE_NAME"), "notehub_csrf_token"),
-		AllowedOrigins:               splitCSV(getenv("CORS_ALLOWED_ORIGINS")),
-		AllowedOriginSuffixes:        splitCSV(getenv("CORS_ALLOWED_ORIGIN_SUFFIXES")),
-		LoginMaxFailures:             intValue(getenv("LOGIN_MAX_FAILURES"), 5),
-		LoginFailureWindow:           durationValue(getenv("LOGIN_FAILURE_WINDOW"), time.Hour),
-		LoginLockDuration:            durationValue(getenv("LOGIN_LOCK_DURATION"), time.Hour),
-		RateLimitCapacity:            intValue(getenv("RATE_LIMIT_CAPACITY"), 10),
-		RateLimitRefillRate:          floatValue(getenv("RATE_LIMIT_REFILL_PER_SECOND"), 1),
-		TrustedProxyCIDRs:            splitCSV(getenv("TRUSTED_PROXY_CIDRS")),
+		Environment:           environment,
+		HTTPPort:              resolveHTTPPort(getenv),
+		DatabaseURL:           strings.TrimSpace(getenv("DATABASE_URL")),
+		RedisURL:              strings.TrimSpace(getenv("REDIS_URL")),
+		RedisOperationTimeout: durationValue(getenv("REDIS_OPERATION_TIMEOUT"), 2*time.Second),
+
+		JWTSecret:       getenv("JWT_SECRET"),
+		JWTIssuer:       valueOrDefault(getenv("JWT_ISSUER"), "notehub-api"),
+		JWTAudience:     valueOrDefault(getenv("JWT_AUDIENCE"), "notehub-client"),
+		AccessTokenTTL:  resolveAccessTokenTTL(getenv),
+		RefreshTokenTTL: resolveRefreshTokenTTL(environment, getenv),
+
+		BcryptCost: intValue(getenv("BCRYPT_COST"), 12),
+
+		CookieSecure:           boolValue(getenv("COOKIE_SECURE"), environment == EnvironmentProduction),
+		CookieDomain:           strings.TrimSpace(getenv("COOKIE_DOMAIN")),
+		CookieSameSite:         normalizeCookieSameSite(valueOrDefault(getenv("COOKIE_SAME_SITE"), "Lax")),
+		RefreshTokenCookieName: valueOrDefault(getenv("REFRESH_TOKEN_COOKIE_NAME"), "notehub_refresh_token"),
+		CSRFTokenCookieName:    valueOrDefault(getenv("CSRF_TOKEN_COOKIE_NAME"), "notehub_csrf_token"),
+
+		AllowedOrigins:        splitCSV(getenv("CORS_ALLOWED_ORIGINS")),
+		AllowedOriginSuffixes: splitCSV(getenv("CORS_ALLOWED_ORIGIN_SUFFIXES")),
+
+		LoginMaxFailures:    intValue(getenv("LOGIN_MAX_FAILURES"), 5),
+		LoginFailureWindow:  durationValue(getenv("LOGIN_FAILURE_WINDOW"), time.Hour),
+		LoginLockDuration:   durationValue(getenv("LOGIN_LOCK_DURATION"), time.Hour),
+		RateLimitCapacity:   intValue(getenv("RATE_LIMIT_CAPACITY"), 10),
+		RateLimitRefillRate: floatValue(getenv("RATE_LIMIT_REFILL_PER_SECOND"), 1),
+		TrustedProxyCIDRs:   splitCSV(getenv("TRUSTED_PROXY_CIDRS")),
+
+		// Request body size limit.
+		// Default: 2 MiB
+		MaxRequestBodyBytes: int64Value(
+			getenv("MAX_REQUEST_BODY_BYTES"),
+			2*1024*1024,
+		),
+
 		WSMaxConnectionsPerDocument:  intValue(getenv("WS_MAX_CONNECTIONS_PER_DOCUMENT"), 3),
 		DocumentAutosaveInterval:     durationValue(getenv("DOCUMENT_AUTOSAVE_INTERVAL"), 10*time.Second),
 		DocumentAutosaveIdleDuration: durationValue(getenv("DOCUMENT_AUTOSAVE_IDLE_DURATION"), 60*time.Second),
@@ -129,13 +146,20 @@ func (c Config) Validate() error {
 	var errs []error
 
 	if c.HTTPPort < 1 || c.HTTPPort > 65535 {
-		errs = append(errs, fmt.Errorf("HTTP_PORT must be between 1 and 65535"))
+		errs = append(errs, fmt.Errorf(
+			"HTTP_PORT must be between 1 and 65535",
+		))
 	}
 
 	if c.DatabaseURL == "" {
-		errs = append(errs, fmt.Errorf("DATABASE_URL is required"))
+		errs = append(errs, fmt.Errorf(
+			"DATABASE_URL is required",
+		))
 	} else if _, err := url.ParseRequestURI(c.DatabaseURL); err != nil {
-		errs = append(errs, fmt.Errorf("DATABASE_URL is invalid: %w", err))
+		errs = append(errs, fmt.Errorf(
+			"DATABASE_URL is invalid: %w",
+			err,
+		))
 	}
 
 	if c.RedisOperationTimeout <= 0 || c.RedisOperationTimeout > 30*time.Second {
@@ -145,15 +169,21 @@ func (c Config) Validate() error {
 	}
 
 	if len([]byte(c.JWTSecret)) < 32 {
-		errs = append(errs, fmt.Errorf("JWT_SECRET must be at least 32 bytes"))
+		errs = append(errs, fmt.Errorf(
+			"JWT_SECRET must be at least 32 bytes",
+		))
 	}
 
 	if strings.TrimSpace(c.JWTIssuer) == "" {
-		errs = append(errs, fmt.Errorf("JWT_ISSUER is required"))
+		errs = append(errs, fmt.Errorf(
+			"JWT_ISSUER is required",
+		))
 	}
 
 	if strings.TrimSpace(c.JWTAudience) == "" {
-		errs = append(errs, fmt.Errorf("JWT_AUDIENCE is required"))
+		errs = append(errs, fmt.Errorf(
+			"JWT_AUDIENCE is required",
+		))
 	}
 
 	if c.AccessTokenTTL <= 0 || c.AccessTokenTTL > 24*time.Hour {
@@ -233,6 +263,14 @@ func (c Config) Validate() error {
 		}
 	}
 
+	// Request body size must be between 1 KiB and 64 MiB.
+	if c.MaxRequestBodyBytes < 1024 ||
+		c.MaxRequestBodyBytes > 64*1024*1024 {
+		errs = append(errs, fmt.Errorf(
+			"MAX_REQUEST_BODY_BYTES must be between 1KB and 64MB",
+		))
+	}
+
 	if c.WSMaxConnectionsPerDocument < 1 ||
 		c.WSMaxConnectionsPerDocument > 20 {
 		errs = append(errs, fmt.Errorf(
@@ -276,7 +314,8 @@ func (c Config) Validate() error {
 		))
 	}
 
-	if c.BackupEnabled && strings.TrimSpace(c.BackupDirectory) == "" {
+	if c.BackupEnabled &&
+		strings.TrimSpace(c.BackupDirectory) == "" {
 		errs = append(errs, fmt.Errorf(
 			"BACKUP_DIR is required when BACKUP_ENABLED is true",
 		))
@@ -402,6 +441,23 @@ func intValue(raw string, fallback int) int {
 	return value
 }
 
+func int64Value(raw string, fallback int64) int64 {
+	if strings.TrimSpace(raw) == "" {
+		return fallback
+	}
+
+	value, err := strconv.ParseInt(
+		strings.TrimSpace(raw),
+		10,
+		64,
+	)
+	if err != nil {
+		return -1
+	}
+
+	return value
+}
+
 func boolValue(raw string, fallback bool) bool {
 	if strings.TrimSpace(raw) == "" {
 		return fallback
@@ -455,7 +511,10 @@ func floatValue(raw string, fallback float64) float64 {
 		return fallback
 	}
 
-	value, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+	value, err := strconv.ParseFloat(
+		strings.TrimSpace(raw),
+		64,
+	)
 	if err != nil {
 		return -1
 	}
@@ -468,7 +527,11 @@ func resolveAccessTokenTTL(getenv func(string) string) time.Duration {
 		return ttl
 	}
 
-	minutes := intValue(getenv("ACCESS_TOKEN_TTL_MINUTES"), 15)
+	minutes := intValue(
+		getenv("ACCESS_TOKEN_TTL_MINUTES"),
+		15,
+	)
+
 	if minutes <= 0 {
 		return 15 * time.Minute
 	}
@@ -485,7 +548,10 @@ func resolveRefreshTokenTTL(
 	}
 
 	if environment == EnvironmentProduction {
-		days := intValue(getenv("REFRESH_TOKEN_TTL_DAYS"), 14)
+		days := intValue(
+			getenv("REFRESH_TOKEN_TTL_DAYS"),
+			14,
+		)
 
 		if days <= 0 {
 			return 14 * 24 * time.Hour
