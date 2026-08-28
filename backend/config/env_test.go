@@ -10,10 +10,10 @@ const testJWTSecret = "01234567890123456789012345678901"
 
 func validEnv() map[string]string {
 	return map[string]string{
-		"APP_ENV":       "development",
-		"DATABASE_URL":  "postgres://user:pass@localhost:5432/notehub",
-		"JWT_SECRET":    testJWTSecret,
-		"REDIS_URL":     "redis://127.0.0.1:6379/0",
+		"APP_ENV":              "development",
+		"DATABASE_URL":         "postgres://user:pass@localhost:5432/notehub",
+		"JWT_SECRET":           testJWTSecret,
+		"REDIS_URL":            "redis://127.0.0.1:6379/0",
 		"CORS_ALLOWED_ORIGINS": "http://localhost:5173",
 	}
 }
@@ -45,6 +45,9 @@ func TestLoadFromEnv_ValidDevelopmentDefaults(t *testing.T) {
 	if cfg.CookieSecure {
 		t.Fatal("development should default CookieSecure to false")
 	}
+	if len(cfg.TrustedProxyCIDRs) != 0 {
+		t.Fatalf("TrustedProxyCIDRs = %v", cfg.TrustedProxyCIDRs)
+	}
 }
 
 func TestLoadFromEnv_UsesPortEnvVar(t *testing.T) {
@@ -75,6 +78,19 @@ func TestLoadFromEnv_ValidProduction(t *testing.T) {
 	}
 	if len(cfg.AllowedOrigins) != 1 {
 		t.Fatalf("AllowedOrigins = %v", cfg.AllowedOrigins)
+	}
+}
+
+func TestLoadFromEnv_TrustedProxyCIDRs(t *testing.T) {
+	env := validEnv()
+	env["TRUSTED_PROXY_CIDRS"] = "76.76.21.0/24, 76.76.19.0/24"
+	env["CLIENT_IP_HEADER"] = "X-Vercel-Forwarded-For"
+	cfg, err := LoadFromEnv(getenvFrom(env))
+	if err != nil {
+		t.Fatalf("LoadFromEnv: %v", err)
+	}
+	if len(cfg.TrustedProxyCIDRs) != 2 {
+		t.Fatalf("TrustedProxyCIDRs = %v", cfg.TrustedProxyCIDRs)
 	}
 }
 
@@ -379,6 +395,9 @@ func TestConfigValidate(t *testing.T) {
 		cfg = base()
 		cfg.RateLimitRefillRate = 0
 		assertErr(t, cfg, "RATE_LIMIT_REFILL_PER_SECOND")
+		cfg = base()
+		cfg.TrustedProxyCIDRs = []string{"76.76.21.0/24", "not-a-cidr"}
+		assertErr(t, cfg, "TRUSTED_PROXY_CIDRS")
 	})
 
 	t.Run("websocket and autosave", func(t *testing.T) {
@@ -458,6 +477,7 @@ func TestLoadFromEnv_InvalidValues(t *testing.T) {
 		{"invalid redis timeout", func(env map[string]string) { env["REDIS_OPERATION_TIMEOUT"] = "bad" }},
 		{"invalid bcrypt cost", func(env map[string]string) { env["BCRYPT_COST"] = "bad" }},
 		{"invalid rate limit", func(env map[string]string) { env["RATE_LIMIT_REFILL_PER_SECOND"] = "bad" }},
+		{"invalid trusted proxy cidr", func(env map[string]string) { env["TRUSTED_PROXY_CIDRS"] = "76.76.21.0" }},
 		{"invalid access token ttl", func(env map[string]string) { env["ACCESS_TOKEN_TTL"] = "25h" }},
 	}
 	for _, tc := range cases {

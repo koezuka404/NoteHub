@@ -41,5 +41,9 @@ services:
         sync: false
       - key: CORS_ALLOWED_ORIGIN_SUFFIXES
         sync: false
+      - key: TRUSTED_PROXY_CIDRS
+        sync: false
+      - key: CLIENT_IP_HEADER
+        value: X-Vercel-Forwarded-For
       - key: PUBLIC_HTTP_URL
         sync: false

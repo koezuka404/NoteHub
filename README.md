@@ -135,6 +135,8 @@ npm run test:coverage
 | `LOGIN_LOCK_DURATION` | — | `1h` | アカウントロック時間 |
 | `RATE_LIMIT_CAPACITY` | — | `10` | レートリミット容量 |
 | `RATE_LIMIT_REFILL_PER_SECOND` | — | `1` | レートリミット補充率 |
+| `TRUSTED_PROXY_CIDRS` | — | 空 | クライアント IP ヘッダを信じてよいプロキシ CIDR（カンマ区切り）。空なら `X-Forwarded-For` 等は無視し TCP ピアを使う |
+| `CLIENT_IP_HEADER` | — | `X-Vercel-Forwarded-For` | 信頼できるプロキシからのみ読むクライアント IP ヘッダ |
 | `WS_MAX_CONNECTIONS_PER_DOCUMENT` | — | `3` | ドキュメントあたり WS 接続上限 |
 | `DOCUMENT_AUTOSAVE_INTERVAL` | — | `10s` | 自動保存間隔 |
 | `DOCUMENT_AUTOSAVE_IDLE_DURATION` | — | `60s` | アイドル自動保存 |
@@ -221,6 +223,8 @@ Vercel の本番 URL が確定したら、Render の Environment を設定して
 |------|-----|------|
 | `CORS_ALLOWED_ORIGINS` | `https://note-hub-three.vercel.app` | 本番フロント URL |
 | `CORS_ALLOWED_ORIGIN_SUFFIXES` | `.vercel.app` | Vercel Preview デプロイ用（`note-hub-git-main-....vercel.app` 等） |
+| `TRUSTED_PROXY_CIDRS` | Vercel Static IPs の CIDR | クライアント IP ヘッダを信じる送信元（空ならヘッダ無視） |
+| `CLIENT_IP_HEADER` | `X-Vercel-Forwarded-For` | Vercel が付与するクライアント IP 専用ヘッダ |
 | `PUBLIC_HTTP_URL` | `https://notehub-4uet.onrender.com` | **Render Dashboard に表示される実際の URL** |
 | `APP_ENV` | `production` | 本番設定 |
 | `COOKIE_SECURE` | `true` | HTTPS Cookie |
@@ -235,6 +239,15 @@ Vercel の Environment:
 | `VITE_WS_BASE_URL` | `wss://notehub-4uet.onrender.com` |
 
 **注意:** `notehub-api.onrender.com` など Blueprint 名と異なる URL になることがあります。Dashboard の URL を使ってください。
+
+**レート制限のクライアント IP:** `echo.ExtractIPFromXFFHeader()` は使いません。誰でも付けられる `X-Forwarded-For` を無条件に信じると、レート制限を回避できます。
+
+| 条件 | 使う IP |
+|---|---|
+| 送信元が `TRUSTED_PROXY_CIDRS` に含まれる | `CLIENT_IP_HEADER`（既定 `X-Vercel-Forwarded-For`） |
+| それ以外（ヘッダ未設定・不正値含む） | TCP のピアアドレス（`RemoteAddr`） |
+
+Vercel は安定した公開 egress CIDR を出していないため、**Functions から API を呼ぶ場合は Static IPs の CIDR を `TRUSTED_PROXY_CIDRS` に入れる**必要があります。ブラウザが Render API へ直接（CORS）接続する現行構成では、リクエストは Vercel を経由しないので、未設定のまま（ヘッダ無視）が正しいです。
 
 **CSRF / セッション:** Echo v4.15 方式。`Sec-Fetch-Site` が `same-origin` / `none` なら Fetch Metadata で許可、`cross-site` / `same-site` では **Double Submit Cookie にフォールバック**します（Vercel + Render のクロスオリジン構成向け）。`register` / `login` / `logout` は CSRF 必須、`refresh` は Refresh Cookie で保護します。
 
