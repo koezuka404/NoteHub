@@ -81,7 +81,7 @@ func normalizeEmail(email string) string {
 }
 
 func validatePassword(password string) bool {
-	if len(password) < minPasswordLength || len(password) > maxPasswordLength {
+	if utf8.RuneCountInString(password) < minPasswordLength || utf8.RuneCountInString(password) > maxPasswordLength {
 		return false
 	}
 	if strings.TrimSpace(password) == "" {

@@ -12,7 +12,6 @@ import (
 	"github.com/koezuka404/notehub/entity"
 	"github.com/koezuka404/notehub/usecase"
 	appws "github.com/koezuka404/notehub/websocket"
-	"github.com/labstack/echo/v4"
 )
 
 func TestHandlers_UnauthenticatedEarlyReturn(t *testing.T) {
@@ -534,7 +533,7 @@ func TestWebSocketController_HandleWorkspaceUpgradeFailure(t *testing.T) {
 	wsID := uuid.New()
 	ctrl, _ := newWebSocketController(t, &mockWSUsecase{}, WebSocketControllerConfig{})
 	ctx, _ := newEchoContextWithParams(t, http.MethodGet, "/", map[string]string{"workspaceId": wsID.String()}, nil)
-	ctx.Request().Header.Set(echo.HeaderAuthorization, "Bearer token")
+	ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, header.payload.signature")
 	if err := ctrl.HandleWorkspace(ctx); err == nil {
 		t.Fatal("expected upgrade error")
 	}
@@ -590,7 +589,7 @@ func TestWebSocketController_HandleDocumentProductionBypassViaTLS(t *testing.T) 
 		onUnregister:  func() {},
 	}, WebSocketControllerConfig{Production: true})
 	ctx, _ := newEchoContextWithParams(t, http.MethodGet, "/", map[string]string{"documentId": docID.String()}, nil)
-	ctx.Request().Header.Set(echo.HeaderAuthorization, "Bearer token")
+	ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, header.payload.signature")
 	ctx.Request().TLS = &tls.ConnectionState{}
 	_ = ctrl.HandleDocument(ctx)
 }
@@ -599,7 +598,7 @@ func TestWebSocketController_HandleWorkspaceProductionBypassViaScheme(t *testing
 	wsID := uuid.New()
 	ctrl, _ := newWebSocketController(t, &mockWSUsecase{}, WebSocketControllerConfig{Production: true})
 	ctx, rec := newEchoContextWithParams(t, http.MethodGet, "/", map[string]string{"workspaceId": wsID.String()}, nil)
-	ctx.Request().Header.Set(echo.HeaderAuthorization, "Bearer token")
+	ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, header.payload.signature")
 	ctx.Request().Header.Set("X-Forwarded-Proto", "https")
 	_ = ctrl.HandleWorkspace(ctx)
 	if rec.Code == http.StatusForbidden {

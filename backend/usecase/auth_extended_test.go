@@ -21,6 +21,12 @@ func TestValidatePassword(t *testing.T) {
 	if validatePassword("        ") {
 		t.Fatal("whitespace-only password should fail")
 	}
+	if !validatePassword("あいうえおか12") {
+		t.Fatal("multibyte password of 8 runes should be valid")
+	}
+	if validatePassword("あいうえおかきくけこさしすせそ12") {
+		t.Fatal("multibyte password over 15 runes should be invalid")
+	}
 }
 
 func TestValidateRegisterInput(t *testing.T) {

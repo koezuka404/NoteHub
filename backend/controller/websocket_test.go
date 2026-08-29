@@ -24,22 +24,18 @@ func newWebSocketController(t *testing.T, ws *mockWSUsecase, cfg WebSocketContro
 	userID := uuid.New()
 	user := &entity.User{ID: userID, Status: entity.UserStatusActive, AuthVersion: 1}
 	claims := infrcrypto.AccessTokenClaims{UserID: userID, JTI: uuid.New(), AuthVersion: 1}
-	ctrl := NewWebSocketController(
-		ws,
-		&mockTokenValidator{claims: claims},
-		&mockUserFinder{user: user, found: true},
-		&mockRevocationChecker{},
-		appws.NewHub(),
-		cfg,
-	)
+
+	ctrl := NewWebSocketController(ws, &mockTokenValidator{claims: claims}, &mockUserFinder{user: user, found: true}, &mockRevocationChecker{}, appws.NewHub(), cfg)
 	ctrl.now = func() time.Time { return testFixedTime }
 	return ctrl, userID
 }
 
 func TestNewWebSocketController_TrimsOrigins(t *testing.T) {
-	ctrl := NewWebSocketController(&mockWSUsecase{}, &mockTokenValidator{}, &mockUserFinder{}, &mockRevocationChecker{}, appws.NewHub(), WebSocketControllerConfig{
-		AllowedOrigins: []string{" http://localhost:5173 ", ""},
-	})
+	ctrl := NewWebSocketController(
+		&mockWSUsecase{}, &mockTokenValidator{}, &mockUserFinder{},
+		&mockRevocationChecker{}, appws.NewHub(),
+		WebSocketControllerConfig{AllowedOrigins: []string{" http://localhost:5173 ", ""}},
+	)
 	if _, ok := ctrl.allowedOrigins["http://localhost:5173"]; !ok {
 		t.Fatal("expected trimmed origin")
 	}
@@ -60,14 +56,18 @@ func TestWebSocketController_backgroundContext(t *testing.T) {
 	ctx, cancel = ctrl.backgroundContext()
 	deadline, ok := ctx.Deadline()
 	cancel()
-	if !ok || time.Until(deadline) > 2*time.Second {
-		t.Fatalf("deadline = %v ok=%v", deadline, ok)
+	if !ok {
+		t.Fatal("expected deadline")
+	}
+	if time.Until(deadline) > 2*time.Second {
+		t.Fatalf("deadline = %v", deadline)
 	}
 }
 
 func TestWebSocketController_checkOrigin(t *testing.T) {
 	ctrl := &WebSocketController{}
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
+
 	if !ctrl.checkOrigin(req) {
 		t.Fatal("empty origin should pass")
 	}
@@ -83,6 +83,7 @@ func TestWebSocketController_checkOrigin(t *testing.T) {
 	if !ctrl.checkOrigin(req) {
 		t.Fatal("allowed origin should pass")
 	}
+
 	req.Header.Set("Origin", "http://denied.example")
 	if ctrl.checkOrigin(req) {
 		t.Fatal("denied origin should fail")
@@ -100,13 +101,21 @@ func TestWebSocketController_authenticate(t *testing.T) {
 		return ctrl
 	}
 
-	t.Run("subprotocol token", func(t *testing.T) {
-		ctrl := makeCtrl(&mockTokenValidator{claims: validClaims}, &mockUserFinder{user: validUser, found: true}, &mockRevocationChecker{})
+	t.Run("valid token", func(t *testing.T) {
+		ctrl := makeCtrl(
+			&mockTokenValidator{claims: validClaims},
+			&mockUserFinder{user: validUser, found: true},
+			&mockRevocationChecker{},
+		)
 		ctx, _ := newEchoContext(t, http.MethodGet, "/", nil)
-		ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, token")
+		ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, header.payload.signature")
+
 		got, err := ctrl.authenticate(ctx)
-		if err != nil || got != userID {
-			t.Fatalf("authenticate() = %v, %v", got, err)
+		if err != nil {
+			t.Fatalf("authenticate() error = %v", err)
+		}
+		if got != userID {
+			t.Fatalf("userID = %v, want %v", got, userID)
 		}
 	})
 
@@ -114,6 +123,7 @@ func TestWebSocketController_authenticate(t *testing.T) {
 		ctrl := makeCtrl(&mockTokenValidator{}, &mockUserFinder{}, &mockRevocationChecker{})
 		ctx, rec := newEchoContext(t, http.MethodGet, "/", nil)
 		_, _ = ctrl.authenticate(ctx)
+
 		if rec.Code != http.StatusUnauthorized {
 			t.Fatalf("status = %d", rec.Code)
 		}
@@ -124,10 +134,15 @@ func TestWebSocketController_authenticate(t *testing.T) {
 	})
 
 	t.Run("expired token", func(t *testing.T) {
-		ctrl := makeCtrl(&mockTokenValidator{err: jwt.ErrTokenExpired}, &mockUserFinder{}, &mockRevocationChecker{})
+		ctrl := makeCtrl(
+			&mockTokenValidator{err: jwt.ErrTokenExpired},
+			&mockUserFinder{},
+			&mockRevocationChecker{},
+		)
 		ctx, rec := newEchoContext(t, http.MethodGet, "/", nil)
-		ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, token")
+		ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, header.payload.signature")
 		_, _ = ctrl.authenticate(ctx)
+
 		payload := decodeErrorResponse(t, rec)
 		if payload.Error.Code != "ACCESS_TOKEN_EXPIRED" {
 			t.Fatalf("code = %q", payload.Error.Code)
@@ -135,10 +150,15 @@ func TestWebSocketController_authenticate(t *testing.T) {
 	})
 
 	t.Run("invalid token", func(t *testing.T) {
-		ctrl := makeCtrl(&mockTokenValidator{err: errors.New("bad")}, &mockUserFinder{}, &mockRevocationChecker{})
+		ctrl := makeCtrl(
+			&mockTokenValidator{err: errors.New("invalid token")},
+			&mockUserFinder{},
+			&mockRevocationChecker{},
+		)
 		ctx, rec := newEchoContext(t, http.MethodGet, "/", nil)
-		ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, token")
+		ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, header.payload.signature")
 		_, _ = ctrl.authenticate(ctx)
+
 		payload := decodeErrorResponse(t, rec)
 		if payload.Error.Code != "ACCESS_TOKEN_INVALID" {
 			t.Fatalf("code = %q", payload.Error.Code)
@@ -146,10 +166,15 @@ func TestWebSocketController_authenticate(t *testing.T) {
 	})
 
 	t.Run("revocation check error", func(t *testing.T) {
-		ctrl := makeCtrl(&mockTokenValidator{claims: validClaims}, &mockUserFinder{}, &mockRevocationChecker{err: errors.New("redis")})
+		ctrl := makeCtrl(
+			&mockTokenValidator{claims: validClaims},
+			&mockUserFinder{},
+			&mockRevocationChecker{err: errors.New("redis")},
+		)
 		ctx, rec := newEchoContext(t, http.MethodGet, "/", nil)
-		ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, token")
+		ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, header.payload.signature")
 		_, _ = ctrl.authenticate(ctx)
+
 		payload := decodeErrorResponse(t, rec)
 		if payload.Error.Code != "AUTH_SERVICE_UNAVAILABLE" {
 			t.Fatalf("code = %q", payload.Error.Code)
@@ -157,10 +182,15 @@ func TestWebSocketController_authenticate(t *testing.T) {
 	})
 
 	t.Run("revoked token", func(t *testing.T) {
-		ctrl := makeCtrl(&mockTokenValidator{claims: validClaims}, &mockUserFinder{}, &mockRevocationChecker{revoked: true})
+		ctrl := makeCtrl(
+			&mockTokenValidator{claims: validClaims},
+			&mockUserFinder{},
+			&mockRevocationChecker{revoked: true},
+		)
 		ctx, rec := newEchoContext(t, http.MethodGet, "/", nil)
-		ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, token")
+		ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, header.payload.signature")
 		_, _ = ctrl.authenticate(ctx)
+
 		payload := decodeErrorResponse(t, rec)
 		if payload.Error.Code != "ACCESS_TOKEN_REVOKED" {
 			t.Fatalf("code = %q", payload.Error.Code)
@@ -168,10 +198,15 @@ func TestWebSocketController_authenticate(t *testing.T) {
 	})
 
 	t.Run("user lookup error", func(t *testing.T) {
-		ctrl := makeCtrl(&mockTokenValidator{claims: validClaims}, &mockUserFinder{err: errors.New("db")}, &mockRevocationChecker{})
+		ctrl := makeCtrl(
+			&mockTokenValidator{claims: validClaims},
+			&mockUserFinder{err: errors.New("db")},
+			&mockRevocationChecker{},
+		)
 		ctx, rec := newEchoContext(t, http.MethodGet, "/", nil)
-		ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, token")
+		ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, header.payload.signature")
 		_, _ = ctrl.authenticate(ctx)
+
 		payload := decodeErrorResponse(t, rec)
 		if payload.Error.Code != "DATABASE_ERROR" {
 			t.Fatalf("code = %q", payload.Error.Code)
@@ -179,10 +214,15 @@ func TestWebSocketController_authenticate(t *testing.T) {
 	})
 
 	t.Run("user not found", func(t *testing.T) {
-		ctrl := makeCtrl(&mockTokenValidator{claims: validClaims}, &mockUserFinder{found: false}, &mockRevocationChecker{})
+		ctrl := makeCtrl(
+			&mockTokenValidator{claims: validClaims},
+			&mockUserFinder{found: false},
+			&mockRevocationChecker{},
+		)
 		ctx, rec := newEchoContext(t, http.MethodGet, "/", nil)
-		ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, token")
+		ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, header.payload.signature")
 		_, _ = ctrl.authenticate(ctx)
+
 		payload := decodeErrorResponse(t, rec)
 		if payload.Error.Code != "ACCESS_TOKEN_INVALID" {
 			t.Fatalf("code = %q", payload.Error.Code)
@@ -191,10 +231,15 @@ func TestWebSocketController_authenticate(t *testing.T) {
 
 	t.Run("user cannot authenticate", func(t *testing.T) {
 		suspended := &entity.User{ID: userID, Status: entity.UserStatusSuspended, AuthVersion: 1}
-		ctrl := makeCtrl(&mockTokenValidator{claims: validClaims}, &mockUserFinder{user: suspended, found: true}, &mockRevocationChecker{})
+		ctrl := makeCtrl(
+			&mockTokenValidator{claims: validClaims},
+			&mockUserFinder{user: suspended, found: true},
+			&mockRevocationChecker{},
+		)
 		ctx, rec := newEchoContext(t, http.MethodGet, "/", nil)
-		ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, token")
+		ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, header.payload.signature")
 		_, _ = ctrl.authenticate(ctx)
+
 		payload := decodeErrorResponse(t, rec)
 		if payload.Error.Code != "ACCESS_TOKEN_INVALID" {
 			t.Fatalf("code = %q", payload.Error.Code)
@@ -202,10 +247,18 @@ func TestWebSocketController_authenticate(t *testing.T) {
 	})
 
 	t.Run("auth version mismatch", func(t *testing.T) {
-		ctrl := makeCtrl(&mockTokenValidator{claims: validClaims}, &mockUserFinder{user: &entity.User{ID: userID, Status: entity.UserStatusActive, AuthVersion: 2}, found: true}, &mockRevocationChecker{})
+		ctrl := makeCtrl(
+			&mockTokenValidator{claims: validClaims},
+			&mockUserFinder{
+				user:  &entity.User{ID: userID, Status: entity.UserStatusActive, AuthVersion: 2},
+				found: true,
+			},
+			&mockRevocationChecker{},
+		)
 		ctx, rec := newEchoContext(t, http.MethodGet, "/", nil)
-		ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, token")
+		ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, header.payload.signature")
 		_, _ = ctrl.authenticate(ctx)
+
 		payload := decodeErrorResponse(t, rec)
 		if payload.Error.Code != "ACCESS_TOKEN_REVOKED" {
 			t.Fatalf("code = %q", payload.Error.Code)
@@ -215,25 +268,67 @@ func TestWebSocketController_authenticate(t *testing.T) {
 
 func TestWebSocketController_sendUseCaseError(t *testing.T) {
 	ctrl := &WebSocketController{now: func() time.Time { return testFixedTime }}
-	client := &appws.Client{Send: make(chan []byte, 4)}
 
-	errorsCases := []struct {
+	testCases := []struct {
+		name string
 		err  error
 		code string
 	}{
-		{usecase.ErrValidation, "VALIDATION_ERROR"},
-		{usecase.ErrDocumentNotFound, "DOCUMENT_NOT_FOUND"},
-		{usecase.ErrDocumentDeleted, "DOCUMENT_DELETED"},
-		{usecase.ErrDocumentContentTooLarge, "DOCUMENT_CONTENT_TOO_LARGE"},
-		{usecase.ErrWorkspaceNotFound, "WORKSPACE_NOT_FOUND"},
-		{usecase.ErrWorkspaceAccessDenied, "WORKSPACE_ACCESS_DENIED"},
-		{usecase.ErrWorkspaceHostSuspended, "WORKSPACE_HOST_SUSPENDED"},
-		{usecase.ErrWorkspaceHostDeleted, "WORKSPACE_HOST_DELETED"},
-		{errors.New("unknown"), "INTERNAL_ERROR"},
+		{"validation", usecase.ErrValidation, "VALIDATION_ERROR"},
+		{"document not found", usecase.ErrDocumentNotFound, "DOCUMENT_NOT_FOUND"},
+		{"document deleted", usecase.ErrDocumentDeleted, "DOCUMENT_DELETED"},
+		{"document content too large", usecase.ErrDocumentContentTooLarge, "DOCUMENT_CONTENT_TOO_LARGE"},
+		{"workspace not found", usecase.ErrWorkspaceNotFound, "WORKSPACE_NOT_FOUND"},
+		{"workspace access denied", usecase.ErrWorkspaceAccessDenied, "WORKSPACE_ACCESS_DENIED"},
+		{"workspace host suspended", usecase.ErrWorkspaceHostSuspended, "WORKSPACE_HOST_SUSPENDED"},
+		{"workspace host deleted", usecase.ErrWorkspaceHostDeleted, "WORKSPACE_HOST_DELETED"},
+		{"unknown", errors.New("unknown"), "INTERNAL_ERROR"},
 	}
-	for _, tc := range errorsCases {
-		client.Send = make(chan []byte, 1)
-		ctrl.sendUseCaseError(client, tc.err)
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &appws.Client{Send: make(chan []byte, 1)}
+			ctrl.sendUseCaseError(client, tc.err)
+
+			payload := <-client.Send
+			var envelope appws.Envelope
+			if err := json.Unmarshal(payload, &envelope); err != nil {
+				t.Fatal(err)
+			}
+
+			var data appws.ErrorData
+			if err := json.Unmarshal(envelope.Data, &data); err != nil {
+				t.Fatal(err)
+			}
+			if data.Code != tc.code {
+				t.Fatalf("code = %q, want %q", data.Code, tc.code)
+			}
+		})
+	}
+}
+
+func TestWebSocketController_handleClientMessage(t *testing.T) {
+	docID, userID := uuid.New(), uuid.New()
+	ctrl := &WebSocketController{
+		wsUseCase: &mockWSUsecase{
+			applyEditOut: &usecase.ApplyDocumentEditOutput{
+				DocumentID: docID,
+				Content:    "updated",
+				UpdatedBy:  userID,
+				UpdatedAt:  testFixedTime.Format(time.RFC3339),
+			},
+		},
+		hub: appws.NewHub(),
+		now: func() time.Time { return testFixedTime },
+	}
+
+	client := &appws.Client{
+		ConnectionID: uuid.New(), UserID: userID, DocumentID: docID,
+		Hub: ctrl.hub, Send: make(chan []byte, 4),
+	}
+
+	assertError := func(t *testing.T, expected string) {
+		t.Helper()
 		payload := <-client.Send
 		var envelope appws.Envelope
 		if err := json.Unmarshal(payload, &envelope); err != nil {
@@ -243,185 +338,119 @@ func TestWebSocketController_sendUseCaseError(t *testing.T) {
 		if err := json.Unmarshal(envelope.Data, &data); err != nil {
 			t.Fatal(err)
 		}
-		if data.Code != tc.code {
-			t.Fatalf("code for %v = %q", tc.err, data.Code)
+		if data.Code != expected {
+			t.Fatalf("code = %q, want %q", data.Code, expected)
 		}
 	}
-}
 
-func TestWebSocketController_handleClientMessage(t *testing.T) {
-	docID := uuid.New()
-	userID := uuid.New()
-	ctrl := &WebSocketController{
-		wsUseCase: &mockWSUsecase{
-			applyEditOut: &usecase.ApplyDocumentEditOutput{
-				DocumentID: docID, Content: "updated", UpdatedBy: userID, UpdatedAt: testFixedTime.Format(time.RFC3339),
-			},
-		},
-		hub: appws.NewHub(),
-		now: func() time.Time { return testFixedTime },
-	}
-	client := &appws.Client{
-		ConnectionID: uuid.New(), UserID: userID, DocumentID: docID,
-		Hub: ctrl.hub, Send: make(chan []byte, 4),
-	}
-
-	ctrl.handleClientMessage(client, []byte("{bad"))
-	select {
-	case payload := <-client.Send:
-		var envelope appws.Envelope
-		_ = json.Unmarshal(payload, &envelope)
-		var data appws.ErrorData
-		_ = json.Unmarshal(envelope.Data, &data)
-		if data.Code != "INVALID_REQUEST" {
-			t.Fatalf("invalid json code = %q", data.Code)
-		}
-	default:
-		t.Fatal("expected error event")
-	}
-
-	editMsg, _ := json.Marshal(appws.ClientMessage{Type: appws.EventDocumentEdit, Data: json.RawMessage(`{"content":`)})
-	ctrl.handleClientMessage(client, editMsg)
-	select {
-	case payload := <-client.Send:
-		var envelope appws.Envelope
-		_ = json.Unmarshal(payload, &envelope)
-		var data appws.ErrorData
-		_ = json.Unmarshal(envelope.Data, &data)
-		if data.Code != "INVALID_REQUEST" {
-			t.Fatalf("invalid edit code = %q", data.Code)
-		}
-	default:
-		t.Fatal("expected invalid edit error")
-	}
-
-	validEdit, _ := json.Marshal(appws.ClientMessage{
-		Type: appws.EventDocumentEdit,
-		Data: mustJSON(t, appws.DocumentEditData{Content: "updated"}),
+	t.Run("invalid json", func(t *testing.T) {
+		ctrl.handleClientMessage(client, []byte("{bad"))
+		assertError(t, "INVALID_REQUEST")
 	})
-	ctrl.handleClientMessage(client, validEdit)
 
-	unsupported, _ := json.Marshal(appws.ClientMessage{Type: "unknown", Data: json.RawMessage(`{}`)})
-	ctrl.handleClientMessage(client, unsupported)
-	select {
-	case payload := <-client.Send:
-		var envelope appws.Envelope
-		_ = json.Unmarshal(payload, &envelope)
-		var data appws.ErrorData
-		_ = json.Unmarshal(envelope.Data, &data)
-		if data.Code != "UNSUPPORTED_EVENT" {
-			t.Fatalf("unsupported code = %q", data.Code)
+	t.Run("invalid edit data", func(t *testing.T) {
+		ctrl.handleClientMessage(client, []byte(`{"type":"document_edit","data":[]}`))
+		assertError(t, "INVALID_REQUEST")
+	})
+
+	t.Run("unsupported event", func(t *testing.T) {
+		msg, err := json.Marshal(appws.ClientMessage{
+			Type: "unknown",
+			Data: json.RawMessage(`{}`),
+		})
+		if err != nil {
+			t.Fatal(err)
 		}
-	default:
-		t.Fatal("expected unsupported event error")
-	}
+		ctrl.handleClientMessage(client, msg)
+		assertError(t, "UNSUPPORTED_EVENT")
+	})
 
-	ctrl.wsUseCase = &mockWSUsecase{applyEditErr: usecase.ErrDocumentNotFound}
-	ctrl.handleClientMessage(client, validEdit)
-	select {
-	case payload := <-client.Send:
-		var envelope appws.Envelope
-		_ = json.Unmarshal(payload, &envelope)
-		var data appws.ErrorData
-		_ = json.Unmarshal(envelope.Data, &data)
-		if data.Code != "DOCUMENT_NOT_FOUND" {
-			t.Fatalf("usecase error code = %q", data.Code)
+	t.Run("usecase error", func(t *testing.T) {
+		ctrl.wsUseCase = &mockWSUsecase{applyEditErr: usecase.ErrDocumentNotFound}
+		msg, err := json.Marshal(appws.ClientMessage{
+			Type: appws.EventDocumentEdit,
+			Data: mustJSON(t, appws.DocumentEditData{Content: "updated"}),
+		})
+		if err != nil {
+			t.Fatal(err)
 		}
-	default:
-		t.Fatal("expected usecase error event")
-	}
-
-	origMarshal := wsMarshalEvent
-	wsMarshalEvent = func(string, any, time.Time) ([]byte, error) { return nil, errors.New("marshal") }
-	t.Cleanup(func() { wsMarshalEvent = origMarshal })
-	ctrl.wsUseCase = &mockWSUsecase{
-		applyEditOut: &usecase.ApplyDocumentEditOutput{
-			DocumentID: docID, Content: "updated", UpdatedBy: userID, UpdatedAt: testFixedTime.Format(time.RFC3339),
-		},
-	}
-	ctrl.handleClientMessage(client, validEdit)
+		ctrl.handleClientMessage(client, msg)
+		assertError(t, "DOCUMENT_NOT_FOUND")
+	})
 }
 
 func TestWebSocketController_sendInitialEvents(t *testing.T) {
 	docID, wsID, userID := uuid.New(), uuid.New(), uuid.New()
 	hub := appws.NewHub()
+
 	ctrl := &WebSocketController{hub: hub, now: func() time.Time { return testFixedTime }}
 	client := &appws.Client{
-		ConnectionID: uuid.New(), UserID: userID, DocumentID: docID, WorkspaceID: wsID,
-		Hub: hub, Send: make(chan []byte, 8),
+		ConnectionID: uuid.New(), UserID: userID, DocumentID: docID,
+		WorkspaceID: wsID, Hub: hub, Send: make(chan []byte, 8),
 	}
+
 	prepared := &usecase.PrepareWebSocketConnectionOutput{
-		DocumentID: docID, WorkspaceID: wsID, Content: "hello", UpdatedAt: testFixedTime.Format(time.RFC3339),
+		DocumentID: docID, WorkspaceID: wsID, Content: "hello",
+		UpdatedAt: testFixedTime.Format(time.RFC3339),
 	}
 	registered := &usecase.RegisterWebSocketConnectionOutput{
 		Editors:      []usecase.DocumentEditorInfo{{UserID: userID, Name: "Alice"}},
 		EditorJoined: true,
 		JoinedEditor: usecase.DocumentEditorInfo{UserID: userID, Name: "Alice"},
 	}
+
 	ctrl.sendInitialEvents(client, prepared, registered)
 	if len(client.Send) != 3 {
 		t.Fatalf("expected 3 direct events, got %d", len(client.Send))
 	}
-
-	origMarshal := wsMarshalEvent
-	wsMarshalEvent = func(eventType string, _ any, _ time.Time) ([]byte, error) {
-		if eventType == appws.EventEditorJoined {
-			return nil, errors.New("marshal")
-		}
-		return origMarshal(eventType, appws.EditorEventData{UserID: userID.String(), Name: "Alice"}, testFixedTime)
-	}
-	t.Cleanup(func() { wsMarshalEvent = origMarshal })
-	ctrl.sendInitialEvents(client, prepared, registered)
 }
 
 func TestWebSocketController_cleanupClient(t *testing.T) {
 	docID, userID := uuid.New(), uuid.New()
-	ctrl := &WebSocketController{
-		wsUseCase: &mockWSUsecase{unregisterErr: errors.New("fail")},
-		now:       func() time.Time { return testFixedTime },
-	}
-	client := &appws.Client{ConnectionID: uuid.New(), UserID: userID, DocumentID: docID}
-	ctrl.cleanupClient(client)
 
-	ctrl.wsUseCase = &mockWSUsecase{
-		unregisterOut: &usecase.UnregisterWebSocketConnectionOutput{
-			EditorLeft: true,
-			LeftEditor: usecase.DocumentEditorInfo{UserID: userID, Name: "Alice"},
-		},
-	}
-	ctrl.hub = appws.NewHub()
-	client.Hub = ctrl.hub
-	ctrl.cleanupClient(client)
+	t.Run("unregister error", func(t *testing.T) {
+		ctrl := &WebSocketController{
+			wsUseCase: &mockWSUsecase{unregisterErr: errors.New("fail")},
+			now:       func() time.Time { return testFixedTime },
+		}
+		client := &appws.Client{ConnectionID: uuid.New(), UserID: userID, DocumentID: docID}
+		ctrl.cleanupClient(client)
+	})
 
-	origMarshal := wsMarshalEvent
-	wsMarshalEvent = func(string, any, time.Time) ([]byte, error) { return nil, errors.New("marshal") }
-	t.Cleanup(func() { wsMarshalEvent = origMarshal })
-	ctrl.cleanupClient(client)
+	t.Run("editor left", func(t *testing.T) {
+		ctrl := &WebSocketController{
+			wsUseCase: &mockWSUsecase{
+				unregisterOut: &usecase.UnregisterWebSocketConnectionOutput{
+					EditorLeft: true,
+					LeftEditor: usecase.DocumentEditorInfo{UserID: userID, Name: "Alice"},
+				},
+			},
+			hub: appws.NewHub(),
+			now: func() time.Time { return testFixedTime },
+		}
+		client := &appws.Client{
+			ConnectionID: uuid.New(), UserID: userID, DocumentID: docID, Hub: ctrl.hub,
+		}
+		ctrl.cleanupClient(client)
+	})
 }
 
 func TestWebSocketController_sendEventMarshalError(t *testing.T) {
 	ctrl := &WebSocketController{now: func() time.Time { return testFixedTime }}
 	client := &appws.Client{Send: make(chan []byte, 1)}
-	origMarshal := wsMarshalEvent
-	wsMarshalEvent = func(string, any, time.Time) ([]byte, error) { return nil, errors.New("marshal") }
-	t.Cleanup(func() { wsMarshalEvent = origMarshal })
-	ctrl.sendEvent(client, appws.EventConnected, appws.ConnectedData{ConnectionID: uuid.NewString()}, testFixedTime)
+
+	original := wsMarshalEvent
+	wsMarshalEvent = func(string, any, time.Time) ([]byte, error) {
+		return nil, errors.New("marshal")
+	}
+	t.Cleanup(func() { wsMarshalEvent = original })
+
+	ctrl.sendEvent(client, appws.EventConnected, appws.ConnectedData{
+		ConnectionID: uuid.NewString(),
+	}, testFixedTime)
+
 	if len(client.Send) != 0 {
 		t.Fatal("expected no message on marshal error")
-	}
-}
-
-func TestWebSocketController_authenticateBearerHeaderOnly(t *testing.T) {
-	userID := uuid.New()
-	validUser := &entity.User{ID: userID, Status: entity.UserStatusActive, AuthVersion: 1}
-	validClaims := infrcrypto.AccessTokenClaims{UserID: userID, JTI: uuid.New(), AuthVersion: 1}
-	ctrl := NewWebSocketController(&mockWSUsecase{}, &mockTokenValidator{claims: validClaims}, &mockUserFinder{user: validUser, found: true}, &mockRevocationChecker{}, appws.NewHub(), WebSocketControllerConfig{})
-	ctrl.now = func() time.Time { return testFixedTime }
-	ctx, _ := newEchoContext(t, http.MethodGet, "/", nil)
-	ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, header-token")
-	got, err := ctrl.authenticate(ctx)
-	if err != nil || got != userID {
-		t.Fatalf("authenticate() = %v, %v", got, err)
 	}
 }
 
@@ -429,9 +458,9 @@ func TestWebSocketController_HandleDocument_ProductionTLS(t *testing.T) {
 	ctrl, _ := newWebSocketController(t, &mockWSUsecase{}, WebSocketControllerConfig{Production: true})
 	ctx, rec := newEchoContextWithParams(t, http.MethodGet, "/documents/:documentId",
 		map[string]string{"documentId": uuid.NewString()}, nil)
-	ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, token")
-	err := ctrl.HandleDocument(ctx)
-	if err != nil {
+	ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, header.payload.signature")
+
+	if err := ctrl.HandleDocument(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if rec.Code != http.StatusForbidden {
@@ -443,9 +472,9 @@ func TestWebSocketController_HandleWorkspace_ProductionTLS(t *testing.T) {
 	ctrl, _ := newWebSocketController(t, &mockWSUsecase{}, WebSocketControllerConfig{Production: true})
 	ctx, rec := newEchoContextWithParams(t, http.MethodGet, "/workspaces/:workspaceId/ws",
 		map[string]string{"workspaceId": uuid.NewString()}, nil)
-	ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, token")
-	err := ctrl.HandleWorkspace(ctx)
-	if err != nil {
+	ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, header.payload.signature")
+
+	if err := ctrl.HandleWorkspace(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if rec.Code != http.StatusForbidden {
@@ -456,14 +485,17 @@ func TestWebSocketController_HandleWorkspace_ProductionTLS(t *testing.T) {
 func TestWebSocketController_HandleDocument_RegisterConnectionError(t *testing.T) {
 	docID := uuid.New()
 	ctrl, _ := newWebSocketController(t, &mockWSUsecase{
-		prepareOut:  &usecase.PrepareWebSocketConnectionOutput{DocumentID: docID, WorkspaceID: uuid.New()},
+		prepareOut: &usecase.PrepareWebSocketConnectionOutput{
+			DocumentID: docID, WorkspaceID: uuid.New(),
+		},
 		registerErr: usecase.ErrWebSocketConnectionLimitExceeded,
 	}, WebSocketControllerConfig{})
+
 	ctx, rec := newEchoContextWithParams(t, http.MethodGet, "/documents/:documentId",
 		map[string]string{"documentId": docID.String()}, nil)
-	ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, token")
-	err := ctrl.HandleDocument(ctx)
-	if err != nil {
+	ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, header.payload.signature")
+
+	if err := ctrl.HandleDocument(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if rec.Code != http.StatusConflict {
@@ -471,19 +503,56 @@ func TestWebSocketController_HandleDocument_RegisterConnectionError(t *testing.T
 	}
 }
 
+func TestWebSocketController_HandleDocument_PrepareError(t *testing.T) {
+	docID := uuid.New()
+	ctrl, _ := newWebSocketController(t, &mockWSUsecase{
+		prepareErr: usecase.ErrDocumentNotFound,
+	}, WebSocketControllerConfig{})
+
+	ctx, rec := newEchoContextWithParams(t, http.MethodGet, "/documents/:documentId",
+		map[string]string{"documentId": docID.String()}, nil)
+	ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, header.payload.signature")
+
+	_ = ctrl.HandleDocument(ctx)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d", rec.Code)
+	}
+}
+
+func TestWebSocketController_HandleWorkspace_PrepareError(t *testing.T) {
+	wsID := uuid.New()
+	ctrl, _ := newWebSocketController(t, &mockWSUsecase{
+		prepareWSErr: usecase.ErrWorkspaceAccessDenied,
+	}, WebSocketControllerConfig{})
+
+	ctx, rec := newEchoContextWithParams(t, http.MethodGet, "/workspaces/:workspaceId/ws",
+		map[string]string{"workspaceId": wsID.String()}, nil)
+	ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, header.payload.signature")
+
+	_ = ctrl.HandleWorkspace(ctx)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d", rec.Code)
+	}
+}
+
 func TestWebSocketController_HandleDocument_UpgradeFailure(t *testing.T) {
 	docID := uuid.New()
 	unregisterCalled := false
+
 	mock := &mockWSUsecase{
-		prepareOut:    &usecase.PrepareWebSocketConnectionOutput{DocumentID: docID, WorkspaceID: uuid.New()},
+		prepareOut: &usecase.PrepareWebSocketConnectionOutput{
+			DocumentID: docID, WorkspaceID: uuid.New(),
+		},
 		registerOut:   &usecase.RegisterWebSocketConnectionOutput{},
 		unregisterOut: &usecase.UnregisterWebSocketConnectionOutput{},
 		onUnregister:  func() { unregisterCalled = true },
 	}
+
 	ctrl, _ := newWebSocketController(t, mock, WebSocketControllerConfig{})
 	ctx, _ := newEchoContextWithParams(t, http.MethodGet, "/documents/:documentId",
 		map[string]string{"documentId": docID.String()}, nil)
-	ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, token")
+	ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, header.payload.signature")
+
 	if err := ctrl.HandleDocument(ctx); err == nil {
 		t.Fatal("expected upgrade error")
 	}
@@ -493,16 +562,16 @@ func TestWebSocketController_HandleDocument_UpgradeFailure(t *testing.T) {
 }
 
 func TestWebSocketController_HandleDocument_Success(t *testing.T) {
-	docID := uuid.New()
-	wsID := uuid.New()
+	docID, wsID := uuid.New(), uuid.New()
+
 	ctrl, _ := newWebSocketController(t, &mockWSUsecase{
 		prepareOut: &usecase.PrepareWebSocketConnectionOutput{
-			DocumentID: docID, WorkspaceID: wsID, Content: "hello", UpdatedAt: testFixedTime.Format(time.RFC3339),
+			DocumentID: docID, WorkspaceID: wsID, Content: "hello",
+			UpdatedAt: testFixedTime.Format(time.RFC3339),
 		},
 		registerOut: &usecase.RegisterWebSocketConnectionOutput{
 			Editors: []usecase.DocumentEditorInfo{{UserID: uuid.New(), Name: "Alice"}},
 		},
-		unregisterOut: &usecase.UnregisterWebSocketConnectionOutput{},
 	}, WebSocketControllerConfig{AllowedOrigins: []string{"http://127.0.0.1"}})
 
 	e := echo.New()
@@ -513,12 +582,14 @@ func TestWebSocketController_HandleDocument_Success(t *testing.T) {
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws/documents/" + docID.String()
 	header := http.Header{}
 	header.Set("Origin", "http://127.0.0.1")
-	header.Set("Sec-WebSocket-Protocol", "bearer, token")
+	header.Set("Sec-WebSocket-Protocol", "bearer, header.payload.signature")
+
 	conn, resp, err := gorillaws.DefaultDialer.Dial(wsURL, header)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
+
 	if resp.StatusCode != http.StatusSwitchingProtocols {
 		t.Fatalf("status = %d", resp.StatusCode)
 	}
@@ -527,6 +598,7 @@ func TestWebSocketController_HandleDocument_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
+
 	var envelope appws.Envelope
 	if err := json.Unmarshal(msg, &envelope); err != nil {
 		t.Fatal(err)
@@ -538,7 +610,9 @@ func TestWebSocketController_HandleDocument_Success(t *testing.T) {
 
 func TestWebSocketController_HandleWorkspace_Success(t *testing.T) {
 	wsID := uuid.New()
-	ctrl, _ := newWebSocketController(t, &mockWSUsecase{}, WebSocketControllerConfig{AllowedOrigins: []string{"http://127.0.0.1"}})
+	ctrl, _ := newWebSocketController(t, &mockWSUsecase{}, WebSocketControllerConfig{
+		AllowedOrigins: []string{"http://127.0.0.1"},
+	})
 
 	e := echo.New()
 	e.GET("/ws/workspaces/:workspaceId", ctrl.HandleWorkspace)
@@ -548,41 +622,19 @@ func TestWebSocketController_HandleWorkspace_Success(t *testing.T) {
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws/workspaces/" + wsID.String()
 	header := http.Header{}
 	header.Set("Origin", "http://127.0.0.1")
-	header.Set("Sec-WebSocket-Protocol", "bearer, token")
+	header.Set("Sec-WebSocket-Protocol", "bearer, header.payload.signature")
+
 	conn, resp, err := gorillaws.DefaultDialer.Dial(wsURL, header)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
+
 	if resp.StatusCode != http.StatusSwitchingProtocols {
 		t.Fatalf("status = %d", resp.StatusCode)
 	}
-
-	_ = conn.WriteMessage(gorillaws.TextMessage, []byte(`{"type":"ping","data":{}}`))
-	time.Sleep(50 * time.Millisecond)
-}
-
-func TestWebSocketController_HandleDocument_PrepareError(t *testing.T) {
-	docID := uuid.New()
-	ctrl, _ := newWebSocketController(t, &mockWSUsecase{prepareErr: usecase.ErrDocumentNotFound}, WebSocketControllerConfig{})
-	ctx, rec := newEchoContextWithParams(t, http.MethodGet, "/documents/:documentId",
-		map[string]string{"documentId": docID.String()}, nil)
-	ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, token")
-	_ = ctrl.HandleDocument(ctx)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("status = %d", rec.Code)
-	}
-}
-
-func TestWebSocketController_HandleWorkspace_PrepareError(t *testing.T) {
-	wsID := uuid.New()
-	ctrl, _ := newWebSocketController(t, &mockWSUsecase{prepareWSErr: usecase.ErrWorkspaceAccessDenied}, WebSocketControllerConfig{})
-	ctx, rec := newEchoContextWithParams(t, http.MethodGet, "/workspaces/:workspaceId/ws",
-		map[string]string{"workspaceId": wsID.String()}, nil)
-	ctx.Request().Header.Set("Sec-WebSocket-Protocol", "bearer, token")
-	_ = ctrl.HandleWorkspace(ctx)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("status = %d", rec.Code)
+	if _, _, err = conn.ReadMessage(); err != nil {
+		t.Fatalf("read: %v", err)
 	}
 }
 

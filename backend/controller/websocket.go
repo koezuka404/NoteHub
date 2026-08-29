@@ -371,18 +371,6 @@ func (c *WebSocketController) authenticate(e echo.Context) (uuid.UUID, error) {
 	return claims.UserID, nil
 }
 
-// extractWebSocketToken extracts the access token from the
-// WebSocket Sec-WebSocket-Protocol header.
-//
-// Expected format:
-//
-//	Sec-WebSocket-Protocol: bearer, <access-token>
-//
-// The token is no longer accepted through:
-//   - ?access_token=...
-//   - Authorization: Bearer ...
-//
-// This keeps the access token out of the WebSocket URL.
 func extractWebSocketToken(r *http.Request) string {
 	protocols := r.Header.Values("Sec-WebSocket-Protocol")
 
@@ -398,10 +386,6 @@ func extractWebSocketToken(r *http.Request) string {
 				continue
 			}
 
-			// The second protocol value is treated as the token.
-			//
-			// JWTs do not contain commas, so splitting the
-			// Sec-WebSocket-Protocol header by comma is sufficient.
 			if isLikelyAccessToken(protocol) {
 				return protocol
 			}
@@ -418,7 +402,6 @@ func isLikelyAccessToken(value string) bool {
 		return false
 	}
 
-	// JWT consists of three dot-separated sections.
 	parts := strings.Split(value, ".")
 
 	return len(parts) == 3
@@ -603,23 +586,24 @@ func (c *WebSocketController) cleanupClient(
 		return
 	}
 
-	now := c.now()
+	if out == nil || !out.EditorLeft {
+		return
+	}
 
-	if out.EditorLeft {
-		payload, err := wsMarshalEvent(
-			appws.EventEditorLeft,
-			appws.EditorEventData{
-				UserID: out.LeftEditor.UserID.String(),
-				Name:   out.LeftEditor.Name,
-			},
-			now,
+	now := c.now()
+	payload, err := wsMarshalEvent(
+		appws.EventEditorLeft,
+		appws.EditorEventData{
+			UserID: out.LeftEditor.UserID.String(),
+			Name:   out.LeftEditor.Name,
+		},
+		now,
+	)
+	if err == nil {
+		c.hub.BroadcastDocument(
+			client.DocumentID,
+			payload,
 		)
-		if err == nil {
-			c.hub.BroadcastDocument(
-				client.DocumentID,
-				payload,
-			)
-		}
 	}
 }
 
