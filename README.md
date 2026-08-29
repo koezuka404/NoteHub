@@ -152,7 +152,7 @@ npm run test:coverage
 | 変数 | 必須 | デフォルト | 説明 |
 |---|---|---|---|
 | `VITE_API_BASE_URL` | 本番 ✅ | 空（同一オリジン `/api`） | Render API URL（末尾スラッシュなし） |
-| `VITE_WS_BASE_URL` | 本番 ✅ | `ws(s)://<host>` | WebSocket URL |
+| `VITE_WS_BASE_URL` | 本番 ✅ | `ws(s)://<host>` | WebSocket のホスト（トークンは URL に含めない。サブプロトコルで渡す） |
 | `VITE_PROXY_TARGET` | — | `http://localhost:8080` | Docker 内 Vite プロキシ先（`vite.config.ts`） |
 
 ### ローカル Docker クイック検証
@@ -246,7 +246,44 @@ Vercel の Environment:
 | 送信元が `TRUSTED_PROXY_CIDRS` に含まれる | `CLIENT_IP_HEADER`（既定 `X-Vercel-Forwarded-For`） |
 | それ以外（ヘッダ未設定・不正値含む） | TCP のピアアドレス（`RemoteAddr`） |
 
-Vercel は安定した公開 egress CIDR を出していないため、**Functions から API を呼ぶ場合は Static IPs の CIDR を `TRUSTED_PROXY_CIDRS` に入れる**必要があります。ブラウザが Render API へ直接（CORS）接続する現行構成では、リクエストは Vercel を経由しないので、未設定のまま（ヘッダ無視）が正しいです。
+Vercel は安定した公開 egress CIDR を出していないため、**Functions から API を呼ぶ場合は Static IPs の CIDR を `TRUSTED_PROXY_CIDRS` に入れる**必要があります。ブラウザが Render API へ直接（CORS）接続する現行構成では、リクエストは Vercel を経由しないので、未設定のまま（ヘッダ無視）が正しいです。`CLIENT_IP_HEADER` に `X-Forwarded-For` は指定できません（起動時エラー）。
+
+### WebSocket 認証（サブプロトコル）
+
+ブラウザの `WebSocket` は handshake に `Authorization` を付けられません。トークンをクエリに載せるとログやプロキシに残るため、**`Sec-WebSocket-Protocol` で文字列として渡します**。
+
+クライアント（`frontend/src/documentWs.ts` / `workspaceWs.ts`）:
+
+```ts
+new WebSocket(wsUrl, ['bearer', accessToken])
+```
+
+サーバーが読むヘッダー:
+
+```
+Sec-WebSocket-Protocol: bearer, <JWT>
+```
+
+| 項目 | 内容 |
+|---|---|
+| 使うもの | `bearer` + JWT（`.` 区切り 3 セグメント） |
+| 使わないもの | `?access_token=`、`Authorization: Bearer` |
+| 接続後 | サーバーはサブプロトコル `bearer` を選んで返し、その上で JSON イベントを送受信する |
+| 本番 | HTTP の `ws://` は拒否（`403 WEBSOCKET_TLS_REQUIRED`）。`wss://` 必須 |
+
+実装: `backend/controller/websocket.go`（抽出・Upgrade の `Subprotocols: ["bearer"]`）。
+
+### CORS
+
+許可 Origin は `CORS_ALLOWED_ORIGINS` との **完全一致のみ** です。`.vercel.app` のようなサフィックスによるサブドメイン一括許可はありません。Preview デプロイを許可する場合は、その URL をカンマ区切りで明示してください。
+
+### リクエストボディ上限
+
+`MAX_REQUEST_BODY_BYTES`（既定 2MiB）をグローバルミドルウェア `NewBodyLimitMiddleware` で適用します。`POST` / `PUT` / `PATCH` が対象です。超過時は **413** `REQUEST_BODY_TOO_LARGE`（メッセージ: 「リクエストが大きすぎます」）。巨大ボディによる転送課金・メモリ枯渇を防ぐための HTTP 層の上限で、ドキュメント本文のアプリ側制限とは別です。
+
+### パスワード長
+
+登録時のパスワードは **UTF-8 のバイト数ではなく文字数（ルーン数）** で 8〜15 を判定します（`utf8.RuneCountInString`）。日本語などマルチバイト文字でも、見た目の文字数で制限します。
 
 **CSRF / セッション:** Echo v4.15 方式。`Sec-Fetch-Site` が `same-origin` / `none` なら Fetch Metadata で許可、`cross-site` / `same-site` では **Double Submit Cookie にフォールバック**します（Vercel + Render のクロスオリジン構成向け）。`register` / `login` / `logout` は CSRF 必須、`refresh` は Refresh Cookie で保護します。
 
@@ -317,7 +354,10 @@ api.POST("/auth/logout",   deps.Auth.Logout,   deps.AuthMiddleware, deps.SecFetc
 
 | レイヤー | 役割 | 設定 |
 |---|---|---|
-| **CORS** | ブラウザがクロスオリジン通信してよいか | `CORS_ALLOWED_ORIGINS` |
+| **CORS** | ブラウザがクロスオリジン通信してよいか | `CORS_ALLOWED_ORIGINS`（完全一致） |
+| **Body limit** | リクエストボディサイズ | `MAX_REQUEST_BODY_BYTES` |
+| **Rate limit IP** | 制限キーのクライアント IP | `TRUSTED_PROXY_CIDRS` + `CLIENT_IP_HEADER` |
+| **WebSocket 認証** | 接続時のアクセストークン | `Sec-WebSocket-Protocol: bearer, <JWT>` |
 | **Sec-Fetch-Site** | Fetch Metadata による早期許可 | コード（環境変数不要） |
 | **CSRF** | 状態変更リクエストの正当性 | Cookie + `X-CSRF-Token` |
 | **Refresh Cookie** | セッション更新 | HttpOnly Cookie（`/api/auth/refresh`） |
