@@ -9,12 +9,14 @@ export class MockWebSocket {
   static instances: MockWebSocket[] = [];
 
   readonly url: string;
+  readonly protocols: string[];
   readyState = MockWebSocket.CONNECTING;
   sent: string[] = [];
   private listeners = new Map<string, Listener[]>();
 
-  constructor(url: string) {
+  constructor(url: string, protocols?: string | string[]) {
     this.url = url;
+    this.protocols = Array.isArray(protocols) ? protocols : protocols ? [protocols] : [];
     MockWebSocket.instances.push(this);
   }
 

@@ -24,7 +24,8 @@ const websocketAuthSubprotocol = "bearer"
 var (
 	wsUpgrader = func(checkOrigin func(*http.Request) bool) *gorillaws.Upgrader {
 		return &gorillaws.Upgrader{
-			CheckOrigin: checkOrigin,
+			CheckOrigin:  checkOrigin,
+			Subprotocols: []string{websocketAuthSubprotocol},
 		}
 	}
 

@@ -72,6 +72,13 @@ func TestLoadFromEnv_ValidDevelopmentDefaults(t *testing.T) {
 		)
 	}
 
+	if cfg.ClientIPHeader != DefaultClientIPHeader {
+		t.Fatalf(
+			"ClientIPHeader = %q",
+			cfg.ClientIPHeader,
+		)
+	}
+
 	if cfg.MaxRequestBodyBytes != 2*1024*1024 {
 		t.Fatalf(
 			"MaxRequestBodyBytes = %d, want %d",
@@ -155,6 +162,24 @@ func TestLoadFromEnv_TrustedProxyCIDRs(t *testing.T) {
 			"TrustedProxyCIDRs = %v",
 			cfg.TrustedProxyCIDRs,
 		)
+	}
+}
+
+func TestLoadFromEnv_ClientIPHeader(t *testing.T) {
+	env := validEnv()
+	env["CLIENT_IP_HEADER"] = "X-Custom-Client-IP"
+
+	cfg, err := LoadFromEnv(getenvFrom(env))
+	if err != nil {
+		t.Fatalf("LoadFromEnv: %v", err)
+	}
+	if cfg.ClientIPHeader != "X-Custom-Client-IP" {
+		t.Fatalf("ClientIPHeader = %q", cfg.ClientIPHeader)
+	}
+
+	env["CLIENT_IP_HEADER"] = "X-Forwarded-For"
+	if _, err := LoadFromEnv(getenvFrom(env)); err == nil {
+		t.Fatal("expected CLIENT_IP_HEADER X-Forwarded-For to fail")
 	}
 }
 
@@ -826,6 +851,15 @@ func TestConfigValidate(t *testing.T) {
 			t,
 			cfg,
 			"TRUSTED_PROXY_CIDRS",
+		)
+
+		cfg = base()
+		cfg.ClientIPHeader = "X-Forwarded-For"
+
+		assertErr(
+			t,
+			cfg,
+			"CLIENT_IP_HEADER",
 		)
 	})
 

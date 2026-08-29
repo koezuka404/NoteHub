@@ -5,10 +5,11 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/koezuka404/notehub/config"
 	"github.com/labstack/echo/v4"
 )
 
-const DefaultClientIPHeader = "X-Vercel-Forwarded-For"
+const DefaultClientIPHeader = config.DefaultClientIPHeader
 
 func NewClientIPExtractor(
 	trustedCIDRs []string,
@@ -17,7 +18,7 @@ func NewClientIPExtractor(
 	networks := parseTrustedProxyCIDRs(trustedCIDRs)
 
 	headerName = strings.TrimSpace(headerName)
-	if headerName == "" {
+	if headerName == "" || strings.EqualFold(headerName, "X-Forwarded-For") {
 		headerName = DefaultClientIPHeader
 	}
 
@@ -33,8 +34,6 @@ func NewClientIPExtractor(
 			return remote
 		}
 
-		// RemoteAddrがTrusted ProxyのCIDRに含まれている
-		// 場合のみ専用ヘッダーを信用する。
 		if !ipInTrustedProxies(peer, networks) {
 			return remote
 		}

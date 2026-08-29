@@ -29,19 +29,13 @@ func New(cfg *config.Config, deps Deps) *echo.Echo {
 
 	e.IPExtractor = appmiddleware.NewClientIPExtractor(
 		cfg.TrustedProxyCIDRs,
-		"X-Vercel-Forwarded-For",
+		cfg.ClientIPHeader,
 	)
 
 	e.Use(appmiddleware.NewRecoveryMiddleware())
 	e.Use(appmiddleware.NewRequestIDMiddleware())
 	e.Use(appmiddleware.NewLoggingMiddleware())
-
-	e.Use(
-		appmiddleware.NewBodyLimitMiddleware(
-			cfg.MaxRequestBodyBytes,
-		),
-	)
-
+	e.Use(appmiddleware.NewBodyLimitMiddleware(cfg.MaxRequestBodyBytes))
 	e.Use(appmiddleware.NewCORSMiddleware(cfg))
 
 	Register(e, deps)

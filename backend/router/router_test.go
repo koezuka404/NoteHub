@@ -3,6 +3,7 @@ package router
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/koezuka404/notehub/config"
@@ -57,6 +58,31 @@ func TestNew(t *testing.T) {
 			rec.Code,
 			http.StatusOK,
 		)
+	}
+}
+
+func TestNew_RejectsOversizedRequestBody(t *testing.T) {
+	cfg := &config.Config{
+		Environment:         config.EnvironmentDevelopment,
+		MaxRequestBodyBytes: 8,
+	}
+
+	e := New(
+		cfg,
+		testDeps(&controller.WebSocketController{}),
+	)
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/health",
+		strings.NewReader("123456789"),
+	)
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusRequestEntityTooLarge)
 	}
 }
 
@@ -166,6 +192,40 @@ func TestNew_UsesDedicatedHeaderFromTrustedProxy(t *testing.T) {
 			got,
 			"198.51.100.20",
 		)
+	}
+}
+
+func TestNew_UsesConfiguredClientIPHeader(t *testing.T) {
+	cfg := &config.Config{
+		Environment: config.EnvironmentDevelopment,
+		TrustedProxyCIDRs: []string{
+			"76.76.21.0/24",
+		},
+		ClientIPHeader: "X-NoteHub-Client-IP",
+	}
+
+	e := New(
+		cfg,
+		testDeps(&controller.WebSocketController{}),
+	)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/health",
+		nil,
+	)
+	req.RemoteAddr = "76.76.21.10:443"
+	req.Header.Set("X-Forwarded-For", "1.2.3.4")
+	req.Header.Set("X-Vercel-Forwarded-For", "9.9.9.9")
+	req.Header.Set("X-NoteHub-Client-IP", "198.51.100.20")
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	ctx := e.NewContext(req, rec)
+	got := ctx.RealIP()
+	if got != "198.51.100.20" {
+		t.Fatalf("RealIP = %q, want %q", got, "198.51.100.20")
 	}
 }
 

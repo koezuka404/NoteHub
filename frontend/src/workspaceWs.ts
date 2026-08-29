@@ -147,8 +147,8 @@ export function connectWorkspaceWebSocket(
       handlers.onError?.('WebSocket の再接続に失敗しました再度ログインしてください');
       return;
     }
-    const url = `${wsBaseUrl()}/ws/workspaces/${workspaceId}?access_token=${encodeURIComponent(token)}`;
-    const ws = new WebSocket(url);
+    const url = `${wsBaseUrl()}/ws/workspaces/${workspaceId}`;
+    const ws = new WebSocket(url, ['bearer', token]);
     socket = ws;
     bindSocket(ws);
   }

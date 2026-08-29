@@ -23,29 +23,10 @@ func NewCORSMiddleware(cfg *config.Config) echo.MiddlewareFunc {
 		allowed[origin] = struct{}{}
 	}
 
-	suffixes := make([]string, 0, len(cfg.AllowedOriginSuffixes))
-	for _, suffix := range cfg.AllowedOriginSuffixes {
-		suffix = strings.TrimSpace(suffix)
-		if suffix == "" {
-			continue
-		}
-		suffixes = append(suffixes, suffix)
-	}
-
 	return echomiddleware.CORSWithConfig(echomiddleware.CORSConfig{
 		AllowOriginFunc: func(origin string) (bool, error) {
-			if _, ok := allowed[origin]; ok {
-				return true, nil
-			}
-			if !strings.HasPrefix(origin, "https://") {
-				return false, nil
-			}
-			for _, suffix := range suffixes {
-				if strings.HasSuffix(origin, suffix) {
-					return true, nil
-				}
-			}
-			return false, nil
+			_, ok := allowed[origin]
+			return ok, nil
 		},
 		AllowCredentials: true,
 		AllowMethods:     []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},

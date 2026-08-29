@@ -257,8 +257,8 @@ export function connectDocumentWebSocket(
       return;
     }
 
-    const url = `${wsBaseUrl()}/ws/documents/${documentId}?access_token=${encodeURIComponent(token)}`;
-    const ws = new WebSocket(url);
+    const url = `${wsBaseUrl()}/ws/documents/${documentId}`;
+    const ws = new WebSocket(url, ['bearer', token]);
     socket = ws;
     bindSocket(ws);
   }

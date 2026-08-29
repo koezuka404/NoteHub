@@ -593,6 +593,9 @@ func TestWebSocketController_HandleDocument_Success(t *testing.T) {
 	if resp.StatusCode != http.StatusSwitchingProtocols {
 		t.Fatalf("status = %d", resp.StatusCode)
 	}
+	if conn.Subprotocol() != "bearer" {
+		t.Fatalf("subprotocol = %q", conn.Subprotocol())
+	}
 
 	_, msg, err := conn.ReadMessage()
 	if err != nil {
@@ -632,6 +635,9 @@ func TestWebSocketController_HandleWorkspace_Success(t *testing.T) {
 
 	if resp.StatusCode != http.StatusSwitchingProtocols {
 		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	if conn.Subprotocol() != "bearer" {
+		t.Fatalf("subprotocol = %q", conn.Subprotocol())
 	}
 	if _, _, err = conn.ReadMessage(); err != nil {
 		t.Fatalf("read: %v", err)

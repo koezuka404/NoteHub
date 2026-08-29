@@ -126,8 +126,8 @@ npm run test:coverage
 | `COOKIE_DOMAIN` | — | 空 | Cookie ドメイン |
 | `REFRESH_TOKEN_COOKIE_NAME` | — | `notehub_refresh_token` | Refresh Cookie 名 |
 | `CSRF_TOKEN_COOKIE_NAME` | — | `notehub_csrf_token` | CSRF Cookie 名 |
-| `CORS_ALLOWED_ORIGINS` | 本番 ✅ | — | 許可 Origin（カンマ区切り、本番 URL など） |
-| `CORS_ALLOWED_ORIGIN_SUFFIXES` | — | — | 許可 Origin サフィックス（例: `.vercel.app` で Preview デプロイも許可） |
+| `MAX_REQUEST_BODY_BYTES` | — | `2097152`（2MiB） | リクエストボディ上限。超過は 413。巨大ボディによる課金・DoS 対策 |
+| `CORS_ALLOWED_ORIGINS` | 本番 ✅ | — | 許可 Origin（カンマ区切り、完全一致のみ。サブドメインは別途列挙） |
 | `PUBLIC_HTTP_URL` | 推奨 | — | 公開 API URL（末尾スラッシュなし） |
 | `REDIS_OPERATION_TIMEOUT` | — | `2s` | Redis 操作タイムアウト |
 | `LOGIN_MAX_FAILURES` | — | `5` | ログイン失敗上限 |
@@ -221,8 +221,7 @@ Vercel の本番 URL が確定したら、Render の Environment を設定して
 
 | 変数 | 例 | 用途 |
 |------|-----|------|
-| `CORS_ALLOWED_ORIGINS` | `https://note-hub-three.vercel.app` | 本番フロント URL |
-| `CORS_ALLOWED_ORIGIN_SUFFIXES` | `.vercel.app` | Vercel Preview デプロイ用（`note-hub-git-main-....vercel.app` 等） |
+| `CORS_ALLOWED_ORIGINS` | `https://note-hub-three.vercel.app` | 本番フロント URL（完全一致。Preview 用ホストはカンマで追加） |
 | `TRUSTED_PROXY_CIDRS` | Vercel Static IPs の CIDR | クライアント IP ヘッダを信じる送信元（空ならヘッダ無視） |
 | `CLIENT_IP_HEADER` | `X-Vercel-Forwarded-For` | Vercel が付与するクライアント IP 専用ヘッダ |
 | `PUBLIC_HTTP_URL` | `https://notehub-4uet.onrender.com` | **Render Dashboard に表示される実際の URL** |
@@ -318,7 +317,7 @@ api.POST("/auth/logout",   deps.Auth.Logout,   deps.AuthMiddleware, deps.SecFetc
 
 | レイヤー | 役割 | 設定 |
 |---|---|---|
-| **CORS** | ブラウザがクロスオリジン通信してよいか | `CORS_ALLOWED_ORIGINS`, `CORS_ALLOWED_ORIGIN_SUFFIXES` |
+| **CORS** | ブラウザがクロスオリジン通信してよいか | `CORS_ALLOWED_ORIGINS` |
 | **Sec-Fetch-Site** | Fetch Metadata による早期許可 | コード（環境変数不要） |
 | **CSRF** | 状態変更リクエストの正当性 | Cookie + `X-CSRF-Token` |
 | **Refresh Cookie** | セッション更新 | HttpOnly Cookie（`/api/auth/refresh`） |

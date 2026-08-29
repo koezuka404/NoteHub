@@ -55,7 +55,9 @@ describe('connectWorkspaceWebSocket', () => {
     );
 
     const socket = lastSocket();
-    expect(socket.url).toContain('/ws/workspaces/ws-1?access_token=token-1');
+    expect(socket.url).toContain('/ws/workspaces/ws-1');
+    expect(socket.url).not.toContain('access_token');
+    expect(socket.protocols).toEqual(['bearer', 'token-1']);
     expect(socket.url.startsWith('ws://') || socket.url.startsWith('wss://')).toBe(true);
     socket.open();
 
@@ -110,7 +112,8 @@ describe('connectWorkspaceWebSocket', () => {
       {},
     );
 
-    expect(lastSocket().url).toBe('wss://ws.example.com/ws/workspaces/ws-1?access_token=token-1');
+    expect(lastSocket().url).toBe('wss://ws.example.com/ws/workspaces/ws-1');
+    expect(lastSocket().protocols).toEqual(['bearer', 'token-1']);
   });
 
   it('ignores list items missing id or title and invalid json', () => {
@@ -166,7 +169,8 @@ describe('connectWorkspaceWebSocket', () => {
     await vi.runAllTimersAsync();
     await Promise.resolve();
     expect(refreshAccessToken).toHaveBeenCalledWith('old-token');
-    expect(lastSocket().url).toContain('access_token=fresh-token');
+    expect(lastSocket().url).toContain('/ws/workspaces/ws-1');
+    expect(lastSocket().protocols).toEqual(['bearer', 'fresh-token']);
 
     emitTokenRefresh();
     await Promise.resolve();
@@ -264,7 +268,8 @@ describe('connectWorkspaceWebSocket', () => {
       {},
     );
 
-    expect(lastSocket().url).toBe('wss://example.com/ws/workspaces/ws-1?access_token=token-1');
+    expect(lastSocket().url).toBe('wss://example.com/ws/workspaces/ws-1');
+    expect(lastSocket().protocols).toEqual(['bearer', 'token-1']);
   });
 
   it('does not connect after reconnect timer when already closed', async () => {

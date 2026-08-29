@@ -60,7 +60,8 @@ describe('connectDocumentWebSocket', () => {
     );
 
     const socket = lastSocket();
-    expect(socket.url).toBe('wss://ws.example.com/ws/documents/doc-1?access_token=token-1');
+    expect(socket.url).toBe('wss://ws.example.com/ws/documents/doc-1');
+    expect(socket.protocols).toEqual(['bearer', 'token-1']);
     socket.open();
     expect(handlers.onOpen).toHaveBeenCalled();
 
@@ -317,7 +318,9 @@ describe('connectDocumentWebSocket', () => {
       {},
     );
 
-    expect(lastSocket().url).toContain('/ws/documents/doc-1?access_token=token-1');
+    expect(lastSocket().url).toContain('/ws/documents/doc-1');
+    expect(lastSocket().url).not.toContain('access_token');
+    expect(lastSocket().protocols).toEqual(['bearer', 'token-1']);
   });
 
   it('uses ws protocol on http pages and handles envelope defaults', () => {
@@ -333,7 +336,8 @@ describe('connectDocumentWebSocket', () => {
 
     connectDocumentWebSocket('doc-1', { getAccessToken: () => 'token-1' }, handlers);
     const socket = lastSocket();
-    expect(socket.url).toBe('ws://example.com/ws/documents/doc-1?access_token=token-1');
+    expect(socket.url).toBe('ws://example.com/ws/documents/doc-1');
+    expect(socket.protocols).toEqual(['bearer', 'token-1']);
     socket.open();
 
     socket.message({ type: 'document_sync', data: {}, timestamp: 't' });
@@ -394,7 +398,8 @@ describe('connectDocumentWebSocket', () => {
     vi.stubGlobal('location', { ...window.location, protocol: 'https:', host: 'example.com' });
 
     connectDocumentWebSocket('doc-1', { getAccessToken: () => 'token-1' }, {});
-    expect(lastSocket().url).toBe('wss://example.com/ws/documents/doc-1?access_token=token-1');
+    expect(lastSocket().url).toBe('wss://example.com/ws/documents/doc-1');
+    expect(lastSocket().protocols).toEqual(['bearer', 'token-1']);
   });
 
   it('aborts in-flight reconnect when connection closes', async () => {

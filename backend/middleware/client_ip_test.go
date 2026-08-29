@@ -53,6 +53,19 @@ func TestClientIPExtractor_TrustsDedicatedHeaderFromVercelCIDR(t *testing.T) {
 	}
 }
 
+func TestClientIPExtractor_RejectsXForwardedForAsHeaderName(t *testing.T) {
+	extractor := NewClientIPExtractor([]string{"76.76.21.0/24"}, "X-Forwarded-For")
+	got := realIP(t, extractor, "76.76.21.10:443", "X-Forwarded-For", "1.2.3.4")
+	if got != "76.76.21.10" {
+		t.Fatalf("RealIP = %q, want remote address when X-Forwarded-For is requested", got)
+	}
+
+	got = realIP(t, extractor, "76.76.21.10:443", DefaultClientIPHeader, "198.51.100.20")
+	if got != "198.51.100.20" {
+		t.Fatalf("RealIP = %q, want dedicated Vercel header after XFF name is rejected", got)
+	}
+}
+
 func TestClientIPExtractor_IgnoresXFFEvenFromTrustedProxy(t *testing.T) {
 	extractor := NewClientIPExtractor([]string{"76.76.21.0/24"}, DefaultClientIPHeader)
 	got := realIP(t, extractor, "76.76.21.10:443", "X-Forwarded-For", "198.51.100.20")

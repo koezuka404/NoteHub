@@ -881,7 +881,9 @@ paths:
       description: |
         HTTP GET で WebSocket にアップグレードする。
 
-        **認証**: クエリ `access_token` または `Authorization: Bearer` ヘッダー。
+        **認証**: `Sec-WebSocket-Protocol: bearer, <access-token>`。
+        クエリ `access_token` および `Authorization` ヘッダーは受け付けない。
+        接続後のデータ転送はサブプロトコル `bearer` で行う。
 
         **サーバー → クライアント** (`{ type, data, timestamp }`):
         - `connected` — 接続確立
@@ -897,11 +899,12 @@ paths:
         - `document_edit` — `{ "data": { "content": "..." } }`
       parameters:
         - $ref: "#/components/parameters/DocumentId"
-        - name: access_token
-          in: query
-          required: false
+        - name: Sec-WebSocket-Protocol
+          in: header
+          required: true
           schema:
             type: string
+          description: "`bearer, <JWT access token>`"
       responses:
         "101":
           description: Switching Protocols（WebSocket）
@@ -931,13 +934,18 @@ paths:
         - `document_created` — 新規ドキュメント
         - `document_updated` — タイトル更新（一覧向け）
         - `document_deleted` — 削除
+
+        **認証**: `Sec-WebSocket-Protocol: bearer, <access-token>`。
+        クエリ `access_token` および `Authorization` ヘッダーは受け付けない。
+        接続後のデータ転送はサブプロトコル `bearer` で行う。
       parameters:
         - $ref: "#/components/parameters/WorkspaceId"
-        - name: access_token
-          in: query
-          required: false
+        - name: Sec-WebSocket-Protocol
+          in: header
+          required: true
           schema:
             type: string
+          description: "`bearer, <JWT access token>`"
       responses:
         "101":
           description: Switching Protocols（WebSocket）

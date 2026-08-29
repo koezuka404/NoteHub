@@ -19,6 +19,8 @@ const (
 	EnvironmentProduction  Environment = "production"
 )
 
+const DefaultClientIPHeader = "X-Vercel-Forwarded-For"
+
 type Config struct {
 	Environment Environment
 	HTTPPort    int
@@ -40,8 +42,7 @@ type Config struct {
 	CookieSameSite         string
 	RefreshTokenCookieName string
 	CSRFTokenCookieName    string
-	AllowedOrigins         []string
-	AllowedOriginSuffixes  []string
+	AllowedOrigins []string
 
 	LoginMaxFailures    int
 	LoginFailureWindow  time.Duration
@@ -49,6 +50,7 @@ type Config struct {
 	RateLimitCapacity   int
 	RateLimitRefillRate float64
 	TrustedProxyCIDRs   []string
+	ClientIPHeader      string
 
 	// Request body size limit.
 	MaxRequestBodyBytes int64
@@ -107,8 +109,7 @@ func LoadFromEnv(getenv func(string) string) (*Config, error) {
 		RefreshTokenCookieName: valueOrDefault(getenv("REFRESH_TOKEN_COOKIE_NAME"), "notehub_refresh_token"),
 		CSRFTokenCookieName:    valueOrDefault(getenv("CSRF_TOKEN_COOKIE_NAME"), "notehub_csrf_token"),
 
-		AllowedOrigins:        splitCSV(getenv("CORS_ALLOWED_ORIGINS")),
-		AllowedOriginSuffixes: splitCSV(getenv("CORS_ALLOWED_ORIGIN_SUFFIXES")),
+		AllowedOrigins: splitCSV(getenv("CORS_ALLOWED_ORIGINS")),
 
 		LoginMaxFailures:    intValue(getenv("LOGIN_MAX_FAILURES"), 5),
 		LoginFailureWindow:  durationValue(getenv("LOGIN_FAILURE_WINDOW"), time.Hour),
@@ -116,6 +117,7 @@ func LoadFromEnv(getenv func(string) string) (*Config, error) {
 		RateLimitCapacity:   intValue(getenv("RATE_LIMIT_CAPACITY"), 10),
 		RateLimitRefillRate: floatValue(getenv("RATE_LIMIT_REFILL_PER_SECOND"), 1),
 		TrustedProxyCIDRs:   splitCSV(getenv("TRUSTED_PROXY_CIDRS")),
+		ClientIPHeader:      valueOrDefault(getenv("CLIENT_IP_HEADER"), DefaultClientIPHeader),
 
 		// Request body size limit.
 		// Default: 2 MiB
@@ -263,6 +265,12 @@ func (c Config) Validate() error {
 		}
 	}
 
+	if strings.EqualFold(c.ClientIPHeader, "X-Forwarded-For") {
+		errs = append(errs, fmt.Errorf(
+			"CLIENT_IP_HEADER cannot be X-Forwarded-For",
+		))
+	}
+
 	// Request body size must be between 1 KiB and 64 MiB.
 	if c.MaxRequestBodyBytes < 1024 ||
 		c.MaxRequestBodyBytes > 64*1024*1024 {
@@ -354,16 +362,6 @@ func (c Config) Validate() error {
 				errs = append(errs, fmt.Errorf(
 					"production origin must be HTTPS: %s",
 					origin,
-				))
-			}
-		}
-
-		for _, suffix := range c.AllowedOriginSuffixes {
-			if !strings.HasPrefix(suffix, ".") ||
-				strings.Contains(suffix, " ") {
-				errs = append(errs, fmt.Errorf(
-					"CORS_ALLOWED_ORIGIN_SUFFIXES entries must start with '.': %s",
-					suffix,
 				))
 			}
 		}
