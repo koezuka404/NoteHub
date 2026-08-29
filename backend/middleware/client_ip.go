@@ -10,18 +10,20 @@ import (
 
 const DefaultClientIPHeader = "X-Vercel-Forwarded-For"
 
-func NewClientIPExtractor(trustedCIDRs []string, headerName string) echo.IPExtractor {
+func NewClientIPExtractor(
+	trustedCIDRs []string,
+	headerName string,
+) echo.IPExtractor {
 	networks := parseTrustedProxyCIDRs(trustedCIDRs)
 
-	// Client IPとして利用するヘッダーはVercelのものに固定する。
-	// 呼び出し側から任意のForwarded系ヘッダーを指定できないようにする。
-	headerName = DefaultClientIPHeader
+	headerName = strings.TrimSpace(headerName)
+	if headerName == "" {
+		headerName = DefaultClientIPHeader
+	}
 
 	return func(req *http.Request) string {
 		remote := remoteAddrIP(req.RemoteAddr)
 
-		// Trusted Proxyが設定されていない場合、
-		// Forwarded系ヘッダーは一切信用しない。
 		if len(networks) == 0 {
 			return remote
 		}
@@ -31,17 +33,17 @@ func NewClientIPExtractor(trustedCIDRs []string, headerName string) echo.IPExtra
 			return remote
 		}
 
-		// 直接接続してきた相手がTrusted Proxyではない場合、
-		// クライアントIPヘッダーを信用しない。
+		// RemoteAddrがTrusted ProxyのCIDRに含まれている
+		// 場合のみ専用ヘッダーを信用する。
 		if !ipInTrustedProxies(peer, networks) {
 			return remote
 		}
 
-		// Trusted Proxyからの接続である場合のみ、
-		// Vercel専用のクライアントIPヘッダーを利用する。
-		if forwarded := firstValidForwardedIP(
+		forwarded := firstValidForwardedIP(
 			req.Header.Get(headerName),
-		); forwarded != "" {
+		)
+
+		if forwarded != "" {
 			return forwarded
 		}
 
@@ -49,7 +51,9 @@ func NewClientIPExtractor(trustedCIDRs []string, headerName string) echo.IPExtra
 	}
 }
 
-func parseTrustedProxyCIDRs(cidrs []string) []*net.IPNet {
+func parseTrustedProxyCIDRs(
+	cidrs []string,
+) []*net.IPNet {
 	networks := make([]*net.IPNet, 0, len(cidrs))
 
 	for _, cidr := range cidrs {
@@ -70,7 +74,10 @@ func parseTrustedProxyCIDRs(cidrs []string) []*net.IPNet {
 	return networks
 }
 
-func ipInTrustedProxies(ip net.IP, networks []*net.IPNet) bool {
+func ipInTrustedProxies(
+	ip net.IP,
+	networks []*net.IPNet,
+) bool {
 	for _, network := range networks {
 		if network.Contains(ip) {
 			return true
@@ -81,12 +88,14 @@ func ipInTrustedProxies(ip net.IP, networks []*net.IPNet) bool {
 }
 
 func remoteAddrIP(remoteAddr string) string {
+	remoteAddr = strings.TrimSpace(remoteAddr)
+
 	host, _, err := net.SplitHostPort(remoteAddr)
-	if err != nil {
-		return strings.Trim(remoteAddr, "[]")
+	if err == nil {
+		return strings.Trim(host, "[]")
 	}
 
-	return strings.Trim(host, "[]")
+	return strings.Trim(remoteAddr, "[]")
 }
 
 func firstValidForwardedIP(header string) string {
