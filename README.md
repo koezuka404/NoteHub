@@ -239,52 +239,6 @@ Vercel の Environment:
 
 **注意:** `notehub-api.onrender.com` など Blueprint 名と異なる URL になることがあります。Dashboard の URL を使ってください。
 
-**レート制限のクライアント IP:** `echo.ExtractIPFromXFFHeader()` は使いません。誰でも付けられる `X-Forwarded-For` を無条件に信じると、レート制限を回避できます。
-
-| 条件 | 使う IP |
-|---|---|
-| 送信元が `TRUSTED_PROXY_CIDRS` に含まれる | `CLIENT_IP_HEADER`（既定 `X-Vercel-Forwarded-For`） |
-| それ以外（ヘッダ未設定・不正値含む） | TCP のピアアドレス（`RemoteAddr`） |
-
-Vercel は安定した公開 egress CIDR を出していないため、**Functions から API を呼ぶ場合は Static IPs の CIDR を `TRUSTED_PROXY_CIDRS` に入れる**必要があります。ブラウザが Render API へ直接（CORS）接続する現行構成では、リクエストは Vercel を経由しないので、未設定のまま（ヘッダ無視）が正しいです。`CLIENT_IP_HEADER` に `X-Forwarded-For` は指定できません（起動時エラー）。
-
-### WebSocket 認証（サブプロトコル）
-
-ブラウザの `WebSocket` は handshake に `Authorization` を付けられません。トークンをクエリに載せるとログやプロキシに残るため、**`Sec-WebSocket-Protocol` で文字列として渡します**。
-
-クライアント（`frontend/src/documentWs.ts` / `workspaceWs.ts`）:
-
-```ts
-new WebSocket(wsUrl, ['bearer', accessToken])
-```
-
-サーバーが読むヘッダー:
-
-```
-Sec-WebSocket-Protocol: bearer, <JWT>
-```
-
-| 項目 | 内容 |
-|---|---|
-| 使うもの | `bearer` + JWT（`.` 区切り 3 セグメント） |
-| 使わないもの | `?access_token=`、`Authorization: Bearer` |
-| 接続後 | サーバーはサブプロトコル `bearer` を選んで返し、その上で JSON イベントを送受信する |
-| 本番 | HTTP の `ws://` は拒否（`403 WEBSOCKET_TLS_REQUIRED`）。`wss://` 必須 |
-
-実装: `backend/controller/websocket.go`（抽出・Upgrade の `Subprotocols: ["bearer"]`）。
-
-### CORS
-
-許可 Origin は `CORS_ALLOWED_ORIGINS` との **完全一致のみ** です。`.vercel.app` のようなサフィックスによるサブドメイン一括許可はありません。Preview デプロイを許可する場合は、その URL をカンマ区切りで明示してください。
-
-### リクエストボディ上限
-
-`MAX_REQUEST_BODY_BYTES`（既定 2MiB）をグローバルミドルウェア `NewBodyLimitMiddleware` で適用します。`POST` / `PUT` / `PATCH` が対象です。超過時は **413** `REQUEST_BODY_TOO_LARGE`（メッセージ: 「リクエストが大きすぎます」）。巨大ボディによる転送課金・メモリ枯渇を防ぐための HTTP 層の上限で、ドキュメント本文のアプリ側制限とは別です。
-
-### パスワード長
-
-登録時のパスワードは **UTF-8 のバイト数ではなく文字数（ルーン数）** で 8〜15 を判定します（`utf8.RuneCountInString`）。日本語などマルチバイト文字でも、見た目の文字数で制限します。
-
 **CSRF / セッション:** Echo v4.15 方式。`Sec-Fetch-Site` が `same-origin` / `none` なら Fetch Metadata で許可、`cross-site` / `same-site` では **Double Submit Cookie にフォールバック**します（Vercel + Render のクロスオリジン構成向け）。`register` / `login` / `logout` は CSRF 必須、`refresh` は Refresh Cookie で保護します。
 
 ### Sec-Fetch-Site 導入の軌跡
@@ -378,3 +332,162 @@ api.POST("/auth/logout",   deps.Auth.Logout,   deps.AuthMiddleware, deps.SecFetc
 ## ライセンス
 
 未設定（必要に応じて追加してください）
+
+## セキュリティまわりの修正
+
+レート制限のクライアント IP、CORS、リクエストボディ上限、WebSocket 認証、パスワード文字数判定を整理した。変更したファイルは各項に列挙する。
+
+### レート制限のクライアント IP
+
+問題は、`X-Forwarded-For` を誰でも付けられること。無条件に信じると他人の IP を偽ってレート制限を回避できる。Echo 標準の `ExtractIPFromXFFHeader()` は使わない。
+
+**判定**
+
+| 条件 | 使う IP |
+|---|---|
+| 接続元が `TRUSTED_PROXY_CIDRS` に含まれる | `CLIENT_IP_HEADER`（既定 `X-Vercel-Forwarded-For`） |
+| それ以外、またはヘッダーが無い／不正 | TCP のピアアドレス（`RemoteAddr`） |
+
+`X-Forwarded-For` は、信頼できるプロキシから来ていても使わない。Vercel からのクライアント IP だけを専用ヘッダーで読む。
+
+**修正ファイル**
+
+| ファイル | 内容 |
+|---|---|
+| `backend/router/router.go` | `e.IPExtractor` に `NewClientIPExtractor(cfg.TrustedProxyCIDRs, cfg.ClientIPHeader)` を渡す。ヘッダー名は直書きしない。レート制限の `RealIP()` もこの結果を使う |
+| `backend/middleware/client_ip.go` | 信頼 CIDR が空 → ヘッダーは見ない。ピアが CIDR 外 → `RemoteAddr`。ヘッダー名が空または `X-Forwarded-For` → `X-Vercel-Forwarded-For` に置き換え |
+| `backend/config/env.go` | `CLIENT_IP_HEADER` を読む（未設定なら `X-Vercel-Forwarded-For`）。値に `X-Forwarded-For` を指定すると起動時エラー |
+| `backend/middleware/client_ip_test.go` | なりすましヘッダー拒否・専用ヘッダー採用のテスト |
+| `backend/router/router_test.go` | 設定した専用ヘッダーを使うこと、`X-Forwarded-For` を無視すること |
+
+本番では `TRUSTED_PROXY_CIDRS` が必須。Vercel Static IP の CIDR を入れたときだけ、専用ヘッダーのクライアント IP を信じる。ブラウザが Render API へ直接（CORS）接続する現行構成では、リクエストは Vercel を経由しないので、未設定のまま（ヘッダ無視）が正しい。
+
+### CORS（サブドメイン一括許可の廃止）
+
+以前は次の 2 段だった。
+
+1. `AllowedOrigins` に書いてある Origin と一致したら許可
+2. 一致しなくても `https://` で、かつ Origin が `.vercel.app` のようなサフィックスで終われば許可
+
+2 があると、本番フロントが `https://note-hub-three.vercel.app` でも `https://なんでも.vercel.app` が通る。Preview 用ホストや別プロジェクトの Vercel アプリまで CORS 対象になる。
+
+今はマップの **完全一致だけ**。
+
+```go
+AllowOriginFunc: func(origin string) (bool, error) {
+    _, ok := allowed[origin]
+    return ok, nil
+}
+```
+
+開発時に Origin 未設定なら、これまでどおり `http://localhost:5173` と `http://127.0.0.1:5173` だけ。メソッド・ヘッダー・Cookie の扱いは変えていない。
+
+**修正ファイル**
+
+| ファイル | 内容 |
+|---|---|
+| `backend/middleware/cors.go` | サフィックス照合を削除。完全一致のみ |
+| `backend/config/env.go` | `AllowedOriginSuffixes` と `CORS_ALLOWED_ORIGIN_SUFFIXES` の読み込み・本番バリデーションを削除 |
+| `backend/middleware/cors_test.go` | サフィックス許可テストをやめ、許可リストに無いサブドメイン（例: `https://preview.note-hub-three.vercel.app`）は `Access-Control-Allow-Origin` を付けないことを確認 |
+| `backend/.env.example` | `CORS_ALLOWED_ORIGIN_SUFFIXES=.vercel.app` を削除 |
+| `render.yaml` | 同じ環境変数を削除 |
+
+Preview デプロイを許可したい場合は、その URL を `CORS_ALLOWED_ORIGINS` に明示的に足す。`.vercel.app` 全体は開かない。
+
+### リクエストボディ上限（DoS / 転送課金対策）
+
+上限なし（またはハンドラで初めて読む）だと、攻撃者が何 GB でも送れる。クラウドでは受信バイトに課金されることがあり、DoS がそのまま請求になる。ボディをラップするだけでは、`Bind` 失敗を各 API が 400 にしてしまい 413 にならないことがあった。
+
+グローバルミドルウェアでコントローラの前に切る。上限は `MAX_REQUEST_BODY_BYTES`（未設定なら **2MiB**、設定できる範囲は 1KiB〜64MiB）。
+
+```go
+// backend/router/router.go — ログの直後・CORS の前
+e.Use(appmiddleware.NewBodyLimitMiddleware(cfg.MaxRequestBodyBytes))
+```
+
+`backend/middleware/body_limit.go` の流れ:
+
+1. GET / HEAD / OPTIONS などは対象外（WebSocket の upgrade は GET なので検査しない）
+2. `Content-Length` が上限超え → 本体を読まずすぐ **413** `REQUEST_BODY_TOO_LARGE`
+3. 長さが無い／申告が小さい（chunked など） → `http.MaxBytesReader` で最大バイトまでだけ読む。超えたらハンドラを呼ばず 413。`Response` を渡しているので超過時に接続側も止めやすい
+4. 上限以内 → 読んだバイト列を新しい `Body` に載せ替えてから次のハンドラへ。`Bind` は小さいバッファだけ見る
+
+超過時のメッセージは「リクエストが大きすぎます」。ドキュメント本文のアプリ側制限とは別の、HTTP 層の受け取り上限。
+
+**修正ファイル**
+
+| ファイル | 内容 |
+|---|---|
+| `backend/router/router.go` | `NewBodyLimitMiddleware` を全ルートに適用 |
+| `backend/middleware/body_limit.go` | サイズ検査・`MaxBytesReader`・413 応答 |
+| `backend/middleware/body_limit_test.go` | Content-Length 超過、実読込超過、GET スキップ |
+| `backend/router/router_test.go` | 過大 POST で 413 |
+| `backend/.env.example` | `MAX_REQUEST_BODY_BYTES=2097152` |
+
+### WebSocket 認証（サブプロトコル）
+
+ブラウザの `WebSocket` は handshake に任意ヘッダーを付けられない。トークンをクエリに載せるとログや Referer、プロキシ履歴に残る。認証用の文字列は `Sec-WebSocket-Protocol` に載せ、接続後はそのサブプロトコル `bearer` でデータを送る。
+
+以前（フロント）:
+
+```ts
+new WebSocket(`${url}?access_token=${token}`)
+```
+
+現在（`frontend/src/documentWs.ts` / `workspaceWs.ts`）:
+
+```ts
+const url = `${wsBaseUrl()}/ws/documents/${documentId}`;
+const ws = new WebSocket(url, ['bearer', token]);
+```
+
+ブラウザは次のヘッダーにする。
+
+```
+Sec-WebSocket-Protocol: bearer, <JWT>
+```
+
+サーバー（`backend/controller/websocket.go`）はサブプロトコルからだけトークンを取る。`bearer` はスキップし、`.` が 2 つある JWT らしき値だけをトークンにする。`?access_token=` と `Authorization` は見ない。
+
+Upgrade 時にサブプロトコル `bearer` を選んで返す（JWT 自体はプロトコル名にしない）。
+
+```go
+wsUpgrader = func(checkOrigin func(*http.Request) bool) *gorillaws.Upgrader {
+    return &gorillaws.Upgrader{
+        CheckOrigin:  checkOrigin,
+        Subprotocols: []string{websocketAuthSubprotocol},
+    }
+}
+```
+
+流れ:
+
+1. クライアントが `bearer` + トークン文字列を送る
+2. サーバーが JWT を検証してから Upgrade
+3. 応答で `Sec-WebSocket-Protocol: bearer`
+4. その上で JSON イベントを送受信
+
+本番の `ws://` は拒否（`403 WEBSOCKET_TLS_REQUIRED`）。`wss://` 必須。
+
+**修正ファイル**
+
+| ファイル | 内容 |
+|---|---|
+| `backend/controller/websocket.go` | トークン抽出、`Subprotocols: ["bearer"]` |
+| `backend/controller/websocket_test.go` | サブプロトコル JWT、選択プロトコルが `bearer` |
+| `frontend/src/documentWs.ts` | `new WebSocket(url, ['bearer', token])` |
+| `frontend/src/workspaceWs.ts` | 同上 |
+| `frontend/src/test/mocks/websocket.ts` | `protocols` を保持 |
+| `frontend/src/documentWs.test.ts` / `workspaceWs.test.ts` | URL にトークンが無いこと、`['bearer', token]` で接続すること |
+| `backend/docs/openapi.yaml` | クエリ認証から `Sec-WebSocket-Protocol` に変更 |
+
+### パスワード長（文字数判定）
+
+Go の `len(string)` は UTF-8 の **バイト数** なので、日本語 8 文字でも制限を超えて落ちていた。標準の `strings` に長さ関数はないため、表示名と同じ `utf8.RuneCountInString` で **文字数（ルーン数）** を数える。8〜15 はこれまでどおり文字数。マルチバイトでも 8 文字なら通り、15 文字超は弾く。
+
+**修正ファイル**
+
+| ファイル | 内容 |
+|---|---|
+| `backend/usecase/auth.go` | `validatePassword` の長さ判定を `utf8.RuneCountInString` に変更 |
+| `backend/usecase/auth_extended_test.go` | マルチバイト 8 文字は可、15 文字超は不可 |
